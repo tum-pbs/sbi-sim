@@ -1,0 +1,14 @@
+name: CHECKERBOARD_FM_OT_baseBenchmarkFMPE-2
+
+dim_flow: 2
+dim_conditioning: 0
+batch_size: 512
+num_steps: 1000
+
+hidden_dim: 128
+num_blocks: 10
+
+_file: configs/2d/fm/fm_ot_baseBenchmarkFMPE.yaml
+
+data:
+  _file: configs/2d/data/checkerboard.yaml

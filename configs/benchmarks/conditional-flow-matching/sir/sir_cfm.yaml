@@ -1,0 +1,72 @@
+name: SIR_10e5_CFM_baseBenchmarkFMPE
+
+dim_flow: 2
+dim_conditioning: 10
+batch_size: 512
+
+hidden_dim: 128
+num_blocks: 10
+
+weighting: 'one'
+loss_type: 'flow'
+scaling_type: 'none'
+
+data:
+  target: data.benchmarks.SIR
+  _file: configs/datasets/benchmarks/10e5_dataset.yaml
+
+strategy:
+  target: strategy.ConditionalFlowMatching
+  params:
+    dim_flow: ${dim_flow}
+    dim_conditioning: ${dim_conditioning}
+    weighting: ${weighting}
+    loss_type: ${loss_type}
+    scaling_type: ${scaling_type}
+    bandwidth: 0.01
+    prior:
+      target: strategy.distributions.get_sir_prior
+    sampler:
+      target: strategy.improved_inference.PriorODESolver
+      params:
+        prior:
+          target: strategy.distributions.get_sir_prior
+        num_steps: 1000
+    schedule:
+        target: strategy.get_paths
+        params:
+          paths:
+            name: optimal_transport
+            params:
+              sigma_min: 1e-3
+    model:
+      target: flows.models.fmpe.BaseBenchmarkFMPE
+      params:
+        hidden_dim: ${hidden_dim}
+        num_blocks: ${num_blocks}
+        out_dim: ${dim_flow}
+
+training:
+  num_epochs: 2000
+  num_steps_per_epoch: 1000
+  batch_size: ${batch_size}
+
+test:
+  active: True
+  tests:
+    c2st:
+      target: callbacks.C2ST
+
+optimization:
+  _file: configs/optimization/adamw.yaml
+
+callbacks:
+  checkpoint:
+    target: callbacks.checkpoint.Checkpoint
+    params:
+      savedir: ${runtime.logdir}
+      key: val_loss
+  scatter:
+    target: callbacks.BenchmarkScatterPlot
+    params:
+      save_every: 200

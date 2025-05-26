@@ -1,0 +1,84 @@
+name: TWO_MOONS_10e5_IFM
+project: SBI-ICLR
+
+dim_flow: 2
+dim_conditioning: 2
+dim_network: 5
+batch_size: 64
+
+hidden_dim: 128
+num_blocks: 10
+
+weighting: 'one'
+loss_type: 'flow'
+scaling_type: 'none'
+
+learning_rate: 0.0002
+
+hidden_dims: [32, 64, 128, 256, 512, 1024, 1024, 1024, 512, 128, 64, 32]
+
+data:
+  target: data.benchmarks.TwoMoons
+  _file: configs/datasets/benchmarks/10e5_dataset.yaml
+
+strategy:
+  target: strategy.ConditionalFlowMatching
+  params:
+    dim_flow: ${dim_flow}
+    dim_conditioning: ${dim_conditioning}
+    weighting: ${weighting}
+    loss_type: ${loss_type}
+    scaling_type: ${scaling_type}
+    time_alpha: 4
+    bandwidth: 0.01
+    prior:
+      target: strategy.distributions.get_two_moons_prior
+    sampler:
+      target: strategy.improved_inference.PriorODESolver
+      params:
+        prior:
+          target: strategy.distributions.get_two_moons_prior
+        solver_name: euler
+        init_stepsize: 0.01
+    schedule:
+        target: strategy.get_paths
+        params:
+          paths:
+            name: optimal_transport
+            params:
+              sigma_min: 1e-4
+    model:
+      target: flows.models.fmpe.SBIResidualNet
+      params:
+        hidden_dims: ${hidden_dims}
+        out_dim: ${dim_flow}
+        in_dim: ${dim_network}
+        activation_fn: gelu
+
+training:
+  num_epochs: 200
+  num_steps_per_epoch: 2000
+  batch_size: ${batch_size}
+  early_stopping:
+    patience: 50
+
+test:
+  active: True
+  tests:
+    c2st:
+      target: callbacks.C2ST
+
+patience: 3
+optimization:
+  _file: configs/optimization/adam_reduce_lr.yaml
+
+callbacks:
+  checkpoint:
+    target: callbacks.checkpoint.Checkpoint
+    params:
+      savedir: ${runtime.logdir}
+      key: val_loss
+  scatter:
+    target: callbacks.BenchmarkScatterPlot
+    params:
+      save_every: 200

@@ -1,0 +1,42 @@
+strategy:
+  target: strategy.FlowMatching
+  params:
+    dim_flow: ${dim_flow}
+    dim_conditioning: ${dim_conditioning}
+    model:
+      target: flows.models.fmpe.BaseFMPE
+      params:
+        residual_blocks: ${residual_blocks}
+        gelu: ${gelu}
+        dim_flow: ${dim_flow}
+        time_embed_dim: 4
+    paths:
+      name: optimal_transport
+      params:
+        sigma_min: 1e-4
+    sampler:
+      target: strategy.improved_inference.ODESolver
+      params:
+        solver_name: euler
+        init_stepsize: 1e-3
+
+training:
+  num_epochs: ${num_epochs}
+  num_steps_per_epoch: ${num_steps_per_epoch}
+  batch_size: ${batch_size}
+
+test:
+  active: True
+  tests:
+    c2st:
+      target: callbacks.C2ST
+
+optimization:
+  _file: configs/optimization/adam.yaml
+
+callbacks:
+  _file: configs/callbacks/default_callbacks.yaml
+  scatter:
+    target: callbacks.BenchmarkScatterPlot
+    params:
+      save_every: 200

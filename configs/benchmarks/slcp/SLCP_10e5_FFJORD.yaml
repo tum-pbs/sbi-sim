@@ -1,0 +1,11 @@
+name: SLCP_10e5_FFJORD
+
+dim_flow: 5
+dim_conditioning: 8
+batch_size: 512
+
+_file: configs/benchmarks/benchmark_ffjord.yaml
+
+data:
+  target: data.benchmarks.SLCP
+  _file: configs/datasets/benchmarks/10e5_dataset.yaml

@@ -1,0 +1,11 @@
+name: SLCP_DISTRACTORS_10e5_FFJORD
+
+dim_flow: 5
+dim_conditioning: 100
+batch_size: 512
+
+_file: configs/benchmarks/benchmark_ffjord.yaml
+
+data:
+  target: data.benchmarks.SLCPDistractors
+  _file: configs/datasets/benchmarks/10e5_dataset.yaml

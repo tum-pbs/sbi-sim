@@ -1,0 +1,17 @@
+flax
+optax==0.1.7
+matplotlib
+scikit-learn
+jaxtyping
+diffrax
+wandb
+omegaconf
+tqdm
+h5py
+diffusers
+google
+objax
+corner
+orbax
+pandas
+astropy

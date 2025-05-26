@@ -1,0 +1,11 @@
+name: SIR_10e5_FFJORD
+
+dim_flow: 2
+dim_conditioning: 10
+batch_size: 512
+
+_file: configs/benchmarks/benchmark_ffjord.yaml
+
+data:
+  target: data.benchmarks.SIR
+  _file: configs/datasets/benchmarks/10e5_dataset.yaml

@@ -1,0 +1,10 @@
+optimizer:
+  target: optimization.adam.AdamOptax
+
+scheduler:
+  target: optimization.schedules.ReduceLROnPlateau
+  params:
+    learning_rate: ${learning_rate}
+    factor: 0.2
+    patience: ${patience}
+    min_lr: 1e-7

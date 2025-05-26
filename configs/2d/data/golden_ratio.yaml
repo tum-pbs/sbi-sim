@@ -1,0 +1,14 @@
+train:
+  target: data.GoldenRatioDataset
+  params:
+    n: ${num_modes}
+    std_factor: ${std_factor}
+    num_steps: ${num_steps_train}
+    batch_size: ${batch_size}
+val:
+  target: data.GoldenRatioDataset
+  params:
+    n: ${num_modes}
+    std_factor: ${std_factor}
+    num_steps: ${num_steps_val}
+    batch_size: ${batch_size}

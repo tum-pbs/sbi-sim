@@ -1,0 +1,17 @@
+name: GAUSSIAN_LINEAR_UNIFORM_10e4_FM_baseBenchmarkFMPE
+
+dim_flow: 10
+dim_conditioning: 10
+batch_size: 512
+
+hidden_dim: 128
+num_blocks: 10
+
+_file: configs/benchmarks/benchmark_fm_baseBenchmarkFMPE.yaml
+
+data:
+  target: data.benchmarks.GaussianLinearUniform
+  _file: configs/datasets/benchmarks/10e4_dataset.yaml
+
+
+

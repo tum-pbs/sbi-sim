@@ -1,0 +1,33 @@
+strategy:
+  target: strategy.NeuralPosteriorEstimation
+  params:
+    model:
+      target: flows.nsf.StackedNSF_CL
+      params:
+        steps: ${steps}
+        dim_flow: ${dim_flow}
+        dim_conditioning: ${dim_conditioning}
+        hidden_dim: ${hidden_dim}
+        B: 4
+        import_samples: 8
+
+training:
+  num_epochs: 1000
+  num_steps_per_epoch: 1000
+  batch_size: ${batch_size}
+
+test:
+  active: True
+  tests:
+    c2st:
+      target: callbacks.C2ST
+
+optimization:
+  _file: configs/optimization/adamw.yaml
+
+callbacks:
+  _file: configs/callbacks/default_callbacks.yaml
+  scatter:
+    target: callbacks.BenchmarkScatterPlot
+    params:
+      save_every: 100

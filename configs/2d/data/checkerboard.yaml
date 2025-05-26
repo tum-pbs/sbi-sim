@@ -1,0 +1,12 @@
+train:
+  target: data.density_estimation.ToyDataset
+  params:
+    data: checkerboard
+    num_steps: ${num_steps}
+    batch_size: ${batch_size}
+val:
+  target: data.density_estimation.ToyDataset
+  params:
+    data: checkerboard
+    num_steps: ${num_steps}
+    batch_size: ${batch_size}

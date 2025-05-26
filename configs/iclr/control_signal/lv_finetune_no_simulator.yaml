@@ -1,0 +1,142 @@
+name: LOTKA_VOLTERRA_JAX_07_zero_signal
+dim_flow: 4
+dim_conditioning: 20
+dim_network: 25
+context_dim: 16
+controlled_flow_in_dim: 10
+aggregation_out_dim: 5
+aggregation_in_dim: 40
+start_time: 0.8
+batch_size: 128
+weighting: one
+loss_type: fm_ot
+scaling_type: none
+learning_rate: 0.001
+hidden_dims:
+- 32
+- 64
+- 128
+- 256
+- 512
+- 512
+- 512
+- 512
+- 512
+- 256
+- 128
+- 64
+- 32
+data:
+  target: data.benchmarks.LotkaVolterraJax
+  _file: configs/datasets/benchmarks/10e5_dataset.yaml
+strategy:
+  target: strategy.SimulatorFeedback
+  params:
+    dim_flow: ${dim_flow}
+    dim_conditioning: ${dim_conditioning}
+    weighting: ${weighting}
+    loss_type: ${loss_type}
+    scaling_type: ${scaling_type}
+    start_time: ${start_time}
+    time_alpha: 0.0
+    prior:
+      target: strategy.distributions.get_normal_gaussian_prior
+      params:
+        shape:
+        - 4
+    sampler:
+      target: strategy.improved_inference.FastCorrectorSampler
+      params:
+        num_steps: 200
+        start_time: ${start_time}
+    schedule:
+      target: strategy.get_paths
+      params:
+        paths:
+          name: optimal_transport
+          params:
+            sigma_min: 0.0001
+    model_pretrained:
+      target: flows.models.fmpe.SBIResidualNet
+      params:
+        hidden_dims: ${hidden_dims}
+        out_dim: ${dim_flow}
+        in_dim: ${dim_network}
+        activation_fn: gelu
+    weight_file_pretrained: /home/holzschuh/projects/github/diffusion-posterior-sampling/source/simulation-based-inference/logs/LOTKA_VOLTERRA_JAX_10e5_4
+    model:
+      target: flows.correction.corrector.CorrectorMock
+      params:
+        simulator:
+          target: simulations.LotkaVolterraSimulator
+          params:
+            type: jax
+        start_time: ${start_time}
+        controlled_flow:
+          target: flows.models.fmpe.DenseResidualNet
+          params:
+            hidden_dims:
+            - 32
+            - 64
+            - 128
+            - 256
+            - 256
+            - 256
+            - 256
+            - 256
+            - 128
+            - 64
+            - 32
+            out_dim: ${dim_flow}
+            in_dim: ${controlled_flow_in_dim}
+            activation_fn: gelu
+            context_dim: ${context_dim}
+        aggregation:
+          target: flows.models.fmpe.DenseResidualNet
+          params:
+            hidden_dims:
+            - 32
+            - 64
+            - 128
+            - 256
+            - 256
+            - 256
+            - 256
+            - 256
+            - 128
+            - 64
+            - 32
+            out_dim: ${aggregation_out_dim}
+            in_dim: ${aggregation_in_dim}
+            activation_fn: gelu
+        freeze: true
+
+training:
+  num_epochs: 200
+  num_steps_per_epoch: 2000
+  batch_size: ${batch_size}
+  early_stopping:
+    patience: 50
+
+test:
+  active: True
+  tests:
+    c2st:
+      target: callbacks.C2ST
+
+patience: 6
+optimization:
+  _file: configs/optimization/adam_reduce_lr.yaml
+
+callbacks:
+  checkpoint:
+    target: callbacks.checkpoint.Checkpoint
+    params:
+      savedir: ${runtime.logdir}
+      key: val_loss
+  scatter:
+      target: callbacks.BenchmarkScatterPlot
+      params:
+        save_every: 25
+
+

@@ -1,0 +1,39 @@
+strategy:
+  target: strategy.FlowMatching
+  params:
+    dim_flow: ${dim_flow}
+    dim_conditioning: ${dim_conditioning}
+    cnf_logp_mode: 'none'
+    cnf_solver_name: 'euler'
+    cnf_init_stepsize: 0.01
+    model:
+      target: flows.models.fmpe.BaseBenchmarkFMPE
+      params:
+        hidden_dim: ${hidden_dim}
+        num_blocks: ${num_blocks}
+        out_dim: ${dim_flow}
+    paths:
+      name: optimal_transport
+      params:
+        sigma_min: 1e-4
+
+training:
+  num_epochs: 2000
+  num_steps_per_epoch: 1000
+  batch_size: ${batch_size}
+
+test:
+  active: True
+  tests:
+    c2st:
+      target: callbacks.C2ST
+
+optimization:
+  _file: configs/optimization/adamw.yaml
+
+callbacks:
+  _file: configs/callbacks/default_callbacks.yaml
+  scatter:
+    target: callbacks.BenchmarkScatterPlot
+    params:
+      save_every: 200

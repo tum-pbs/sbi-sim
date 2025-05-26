@@ -1,0 +1,11 @@
+name: TWO_MOONS_10e4_FFJORD
+
+dim_flow: 2
+dim_conditioning: 2
+batch_size: 512
+
+_file: configs/benchmarks/benchmark_ffjord.yaml
+
+data:
+  target: data.benchmarks.TwoMoons
+  _file: configs/datasets/benchmarks/10e4_dataset.yaml

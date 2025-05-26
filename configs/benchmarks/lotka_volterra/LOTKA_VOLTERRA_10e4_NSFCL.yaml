@@ -1,0 +1,14 @@
+name: LOTKA_VOLTERRA_10e4_NSFCL
+
+dim_flow: 4
+dim_conditioning: 20
+batch_size: 512
+
+hidden_dim: 96
+steps: 6
+
+_file: configs/benchmarks/benchmark_nsfcl.yaml
+
+data:
+  target: data.benchmarks.LotkaVolterra
+  _file: configs/datasets/benchmarks/10e4_dataset.yaml

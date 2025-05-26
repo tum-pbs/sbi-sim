@@ -1,0 +1,52 @@
+name: NSF_CL_MOD_COND
+seed: ${runtime.seed}
+
+training:
+
+  num_epochs: 100
+  num_steps_per_epoch: 1000
+  batch_size: &batch_size 256
+
+optimization:
+
+  optimizer:
+    target: optimization.adam.AdamStax
+    params:
+
+  scheduler:
+    target: optimization.schedules.constant_schedule
+    params:
+      lr: 1e-4
+
+data:
+  num_features: &num_features 2
+  batch_size: *batch_size
+  _file: configs/datasets/simple_moons_class.yaml
+
+model:
+
+  target: flows.nsf.StackedNSF_CL
+  params:
+    steps: 8
+    dim_flow: *num_features
+    dim_conditioning: 1
+    hidden_dim: 32
+    B: 3
+    K: 8
+    import_samples: 8
+    use_actnorm: True
+    use_onebyoneconv: False
+
+callbacks:
+
+
+  callback3:
+    target: callbacks.moons_simple.SimpleMoonDatasetPlotsConditional
+    params:
+  checkpoint:
+    target: callbacks.checkpoint.Checkpoint
+    params:
+      savedir: ${runtime.logdir}
+      key: val_loss
+
+

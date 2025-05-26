@@ -1,0 +1,16 @@
+name: SIR_10e5_CNF_baseBenchmarkFMPE
+
+dim_flow: 2
+dim_conditioning: 10
+batch_size: 512
+
+hidden_dim: 128
+num_blocks: 10
+
+_file: configs/benchmarks/benchmark_cnf_baseBenchmarkFMPE.yaml
+
+data:
+  target: data.benchmarks.SIR
+  _file: configs/datasets/benchmarks/10e5_dataset.yaml
+
+

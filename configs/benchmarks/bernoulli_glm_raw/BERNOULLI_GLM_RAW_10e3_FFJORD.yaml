@@ -1,0 +1,12 @@
+name: BERNOULLI_GLM_RAW_10e3_FFJORD
+
+dim_flow: 10
+dim_conditioning: 100
+
+batch_size: 512
+
+_file: configs/benchmarks/benchmark_ffjord.yaml
+
+data:
+  target: data.benchmarks.BernoulliGLMRaw
+  _file: configs/datasets/benchmarks/10e3_dataset.yaml

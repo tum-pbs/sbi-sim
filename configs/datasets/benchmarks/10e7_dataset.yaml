@@ -1,0 +1,18 @@
+train:
+  target: ${data.target}
+  params:
+    DATA_ROOT: ${paths.sbi_benchmark}
+    num_samples: 10000000
+    split: [0, 9499999]
+    seed: 0
+    num_steps: 1000
+    batch_size: ${batch_size}
+val:
+  target: ${data.target}
+  params:
+    DATA_ROOT: ${paths.sbi_benchmark}
+    num_samples: 10000000
+    split: [9500000, 9999999]
+    seed: 1
+    num_steps: 100
+    batch_size: ${batch_size}

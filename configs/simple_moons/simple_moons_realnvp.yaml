@@ -1,0 +1,66 @@
+name: realNVP
+
+training:
+
+  num_epochs: 100
+  num_steps_per_epoch: 1000
+  batch_size: &batch_size 256
+
+optimization:
+
+  optimizer:
+    target: optimization.adam.AdamStax
+    params:
+
+  scheduler:
+    target: optimization.schedules.constant_schedule
+    params:
+      lr: 1e-4
+
+data:
+
+  num_features: &num_features 2
+
+  train:
+
+    target: data.moons_simple.SimpleMoonsDataLoader
+    params:
+      seed: 0
+      num_samples: 10000
+      num_steps: 1000
+      batch_size: *batch_size
+      shuffle: True
+
+  val:
+
+    target: data.moons_simple.SimpleMoonsDataLoader
+    params:
+      seed: 1
+      num_samples: 2000
+      num_steps: 100
+      batch_size: *batch_size
+      shuffle: False
+
+model:
+
+  target: flows.realnvp2d.RealNVP2D
+  params:
+    steps: 6
+    dim_flow: *num_features
+    dim_conditioning: 0
+    import_samples: 8
+
+callbacks:
+
+  callback1:
+    target: callbacks.datasetcheck.DatasetCheck
+    params:
+  callback2:
+    target: callbacks.flowcheck.FlowCheck
+    params:
+  callback3:
+    target: callbacks.moons_simple.SimpleMoonDatasetPlots
+    params:
+
+
+
