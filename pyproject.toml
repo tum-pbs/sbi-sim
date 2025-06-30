@@ -1,0 +1,154 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sbisim"
+version = "0.1.0"
+description = "Advanced training and inference of conditional generative models."
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Benjamin Holzschuh"}
+]
+keywords = ["simulation-based-inference", "machine-learning", "physics"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "flax",
+    "optax==0.1.7",
+    "matplotlib",
+    "scikit-learn",
+    "jaxtyping",
+    "diffrax",
+    "wandb",
+    "omegaconf",
+    "tqdm",
+    "h5py",
+    "diffusers",
+    "google",
+    "objax",
+    "corner",
+    "orbax",
+    "pandas",
+    "astropy",
+    "jax[cuda12]",
+    "numpy",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "black",
+    "isort",
+    "flake8",
+    "mypy",
+]
+docs = [
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocs-jupyter",
+    "mkdocstrings[python]",
+]
+
+[project.urls]
+Homepage = "https://github.com/tum-pbs/sbi-sim"
+Documentation = "https://tum-pbs.github.io/sbi-sim"
+Repository = "https://github.com/your-org/sbi-sim.git"
+"Bug Tracker" = "https://github.com/tum-pbs/sbi-sim/issues"
+"Paper" = "https://arxiv.org/abs/2410.22573"
+
+[project.scripts]
+sbisim = "main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "sbisim*", 
+]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.yml", "*.json"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["flows", "optimization", "metrics", "callbacks", "strategy", "data"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=sbisim",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "jax.*",
+    "jaxlib.*",
+    "flax.*",
+    "optax.*",
+    "diffrax.*",
+    "wandb.*",
+    "omegaconf.*",
+    "diffusers.*",
+    "objax.*",
+    "corner.*",
+    "orbax.*",
+    "astropy.*",
+]
+ignore_missing_imports = true 

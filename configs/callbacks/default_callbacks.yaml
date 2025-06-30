@@ -1,12 +1,12 @@
 datasetcheck:
-  target: callbacks.datasetcheck.DatasetCheck
+  target: sbisim.callbacks.datasetcheck.DatasetCheck
   params:
 #flowcheck:
 #  target: callbacks.flowcheck.FlowCheck
 #  params:
 #    interrupt: False
 checkpoint:
-  target: callbacks.checkpoint.Checkpoint
+  target: sbisim.callbacks.checkpoint.Checkpoint
   params:
     savedir: ${runtime.logdir}
     key: val_loss

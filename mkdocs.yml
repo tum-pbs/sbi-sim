@@ -1,0 +1,120 @@
+site_name: sbisim
+site_description: Neural Posterior Estimation in JAX. Advanced methods for training and inference of conditional generative models.
+site_author: Benjamin Holzschuh
+site_url: https://github.com/tum-pbs/sbi-sim
+repo_name: tum-pbs/sbi-sim
+repo_url: https://github.com/tum-pbs/sbi-sim
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/toggle-switch-off-outline
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  font:
+    text: Roboto
+    code: Roboto Mono
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.smartsymbols
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [../]
+          options:
+            show_source: true
+            show_root_heading: true
+            show_category_heading: true
+            show_signature_annotations: true
+            show_bases: true
+            show_submodules: true
+            merge_init_into_class: true
+            show_if_no_docstring: false
+            members_order: source
+            docstring_style: google
+            preload_modules: true
+  - mkdocs-jupyter:
+      include_source: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quick-start.md
+    - Finetuning: getting-started/finetuning.md
+  - User Guide:
+    - Overview: user-guide/overview.md
+    - Strategies: user-guide/strategies.md
+    - Flows: user-guide/flows.md
+    - Callbacks: user-guide/callbacks.md
+    - Optimization: user-guide/optimization.md
+  - API Reference:
+    - Strategy: api/strategy.md
+    - Flows: api/flows.md
+    - Callbacks: api/callbacks.md
+    - Optimization: api/optimization.md
+    - Data: api/data.md
+  - Examples:
+    - Basic Examples: examples/basic-examples.md
+    - Advanced Examples: examples/advanced-examples.md
+    - Benchmarks: examples/benchmarks.md
+  - Development:
+    - Contributing: development/contributing.md
+    - Building from Source: development/building.md
+    - Testing: development/testing.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/tum-pbs/sbi-sim
+  version:
+    provider: mike
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js 

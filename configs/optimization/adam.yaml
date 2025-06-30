@@ -1,8 +1,8 @@
 optimizer:
-  target: optimization.adam.AdamOptax
+  target: sbisim.optimization.adam.AdamOptax
 
 scheduler:
-  target: optimization.schedules.ReduceLROnPlateau
+  target: sbisim.optimization.schedules.ReduceLROnPlateau
   params:
     learning_rate: ${learning_rate}
     factor: 0.2

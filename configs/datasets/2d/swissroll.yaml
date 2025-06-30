@@ -1,0 +1,12 @@
+train:
+  target: sbisim.data.density_estimation.ToyDataset
+  params:
+    data: swissroll
+    num_steps: ${num_steps}
+    batch_size: ${batch_size}
+val:
+  target: sbisim.data.density_estimation.ToyDataset
+  params:
+    data: swissroll
+    num_steps: ${num_steps}
+    batch_size: ${batch_size}

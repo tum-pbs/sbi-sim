@@ -11,10 +11,9 @@ from omegaconf import OmegaConf
 
 import jax.random as jr
 
-from optimization.optimization import Optimization
-from trainer import TrainerModule
-from utils import instantiate_from_config, parse_config, restore_checkpoint
-
+from sbisim.optimization import Optimization
+from sbisim.trainer import TrainerModule
+from sbisim.utils import instantiate_from_config, parse_config, restore_checkpoint
 
 DEFAULT_ENVIRONMENT = './env/local.yaml'
 
@@ -54,11 +53,11 @@ def get_parser(**parser_kwargs):
     parser.add_argument(
         "-c",
         "--config",
-        nargs="*",
+        nargs="+",
         metavar="flow.yaml",
         help="paths to base configs. Loaded from left-to-right. "
              "Parameters can be overwritten or added with command-line options of the form `--key value`.",
-        default=list(),
+        required=True,
     )
 
     parser.add_argument(

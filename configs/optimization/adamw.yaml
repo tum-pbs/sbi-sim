@@ -1,9 +1,9 @@
 optimizer:
-  target: optimization.adam.AdamWOptax
+  target: sbisim.optimization.adam.AdamWOptax
   params:
     weight_decay: 1e-5
 
 scheduler:
-  target: optimization.schedules.constant_schedule
+  target: sbisim.optimization.schedules.constant_schedule
   params:
     lr: 1e-4

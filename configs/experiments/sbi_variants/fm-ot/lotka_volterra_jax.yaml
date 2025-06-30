@@ -1,0 +1,89 @@
+name: FM_LOTKA_VOLTERRA_JAX_10e5
+project: SBI-ICLR
+
+dim_flow: 4
+dim_conditioning: 20
+dim_network: 25
+
+batch_size: 256
+
+weighting: 'one'
+loss_type: 'fm_ot'
+scaling_type: 'none'
+
+learning_rate: 0.001
+
+hidden_dims: [32, 64, 128, 256, 512, 512, 512, 512, 512, 256, 128, 64, 32]
+
+data:
+  target: sbisim.data.benchmarks.LotkaVolterraJax
+  _file: configs/datasets/benchmarks/10e5_dataset.yaml
+
+strategy:
+  target: sbisim.strategy.ConditionalFlowMatching
+  params:
+    dim_flow: ${dim_flow}
+    dim_conditioning: ${dim_conditioning}
+    weighting: ${weighting}
+    loss_type: ${loss_type}
+    scaling_type: ${scaling_type}
+    time_alpha: 1
+    bandwidth: 0.01
+    prior:
+      target: sbisim.strategy.distributions.get_normal_gaussian_prior
+      params:
+        shape:
+         - ${dim_flow}
+    sampler:
+      target: sbisim.strategy.improved_inference.PriorODESolver
+      params:
+        prior:
+          target: sbisim.strategy.distributions.get_normal_gaussian_prior
+          params:
+            shape:
+             - ${dim_flow}
+        solver_name: euler
+        init_stepsize: 0.01
+    schedule:
+        target: sbisim.strategy.get_paths
+        params:
+          paths:
+            name: optimal_transport
+            params:
+              sigma_min: 1e-4
+    model:
+      target: sbisim.flows.models.fmpe.SBIResidualNet
+      params:
+        hidden_dims: ${hidden_dims}
+        out_dim: ${dim_flow}
+        in_dim: ${dim_network}
+        activation_fn: gelu
+
+training:
+  num_epochs: 200
+  num_steps_per_epoch: 2000
+  batch_size: ${batch_size}
+  early_stopping:
+    patience: 50
+
+test:
+  active: True
+  tests:
+    c2st:
+      target: sbisim.callbacks.C2ST
+
+patience: 3
+optimization:
+  _file: configs/optimization/adam_reduce_lr.yaml
+
+callbacks:
+  checkpoint:
+    target: sbisim.callbacks.checkpoint.Checkpoint
+    params:
+      savedir: ${runtime.logdir}
+      key: val_loss
+  scatter:
+    target: sbisim.callbacks.BenchmarkScatterPlot
+    params:
+      save_every: 50
+      savedir: ${runtime.logdir}

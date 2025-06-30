@@ -1,0 +1,60 @@
+name: LOTKA_VOLTERRA_10e5_FFJORD  
+project: SBI
+
+dim_flow: 4
+dim_conditioning: 20
+dim_network: 25
+
+batch_size: 256
+
+learning_rate: 0.001
+
+data:
+  target: sbisim.data.benchmarks.LotkaVolterra
+  _file: configs/datasets/benchmarks/10e5_dataset.yaml
+
+strategy:
+  target: sbisim.strategy.NeuralPosteriorEstimation
+  params:
+    model:
+      target: sbisim.flows.ffjord.StackedFFJORD
+      params:
+        dim_flow: ${dim_flow}
+        dim_conditioning: ${dim_conditioning}
+        import_samples: 8
+        mode: exact
+        init_stepsize: 0.1
+        stepsize_controller_name: constant
+        solver_name: tsit5
+        steps: 1
+        width_size: 256
+        depth: 6
+
+training:
+  num_epochs: 200
+  num_steps_per_epoch: 2000
+  batch_size: ${batch_size}
+  early_stopping:
+    patience: 50
+
+test:
+  active: True
+  tests:
+    c2st:
+      target: sbisim.callbacks.C2ST
+
+patience: 3
+optimization:
+  _file: configs/optimization/adam_reduce_lr.yaml
+
+callbacks:
+  checkpoint:
+    target: sbisim.callbacks.checkpoint.Checkpoint
+    params:
+      savedir: ${runtime.logdir}
+      key: val_loss
+  scatter:
+    target: sbisim.callbacks.BenchmarkScatterPlot
+    params:
+      save_every: 50
+      savedir: ${runtime.logdir}

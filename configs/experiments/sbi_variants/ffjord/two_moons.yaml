@@ -1,0 +1,53 @@
+name: TWO_MOONS_10e5_FFJORD # experiment name. Can be overwritten in CLI
+project: SBI # project name for logging in wandb
+
+dim_flow: 2 # dimensionaly of the normalizing flow
+dim_conditioning: 2 # dimensionality of the conditioning
+
+batch_size: 256 # batch size for learning
+
+learning_rate: 0.001 # learning rate
+
+data:
+  target: sbisim.data.benchmarks.TwoMoons # loads the TwoMoons dataset
+  _file: configs/datasets/benchmarks/10e5_dataset.yaml # file containing data splits and settings.
+
+strategy:
+  target: sbisim.strategy.NeuralPosteriorEstimation # maximum likelihood training
+  params:
+    model:
+      target: sbisim.flows.ffjord.StackedFFJORD # FFJORD neural network architecture
+      params:
+        dim_flow: ${dim_flow} # references dim_flow defined above
+        dim_conditioning: ${dim_conditioning}
+        import_samples: 8 # number of samples to import for training
+        width_size: 256 # FFJORD network width
+        depth: 6 # FFJORD number of layers
+
+training:
+  num_epochs: 200 # train for 200 epochs
+  batch_size: ${batch_size}
+  early_stopping:
+    patience: 50 # early stopping if the val loss doesn't decrease after 50 steps
+
+test: 
+  active: True # after training run tests
+  tests:
+    c2st:
+      target: sbisim.callbacks.C2ST # C2ST and MMD tests
+
+patience: 3 # reduce learning rate if val loss does not decrease after 3 epochs
+optimization:
+  _file: configs/optimization/adam_reduce_lr.yaml # contains settings for optimizer
+
+callbacks:
+  checkpoint:
+    target: sbisim.callbacks.checkpoint.Checkpoint # checkpoint for model saving
+    params:
+      savedir: ${runtime.logdir} # reference runtime.logdir which is determined from CLI
+      key: val_loss # key for best train/val selection
+  scatter:
+    target: sbisim.callbacks.BenchmarkScatterPlot # visualization of posterior samples
+    params:
+      save_every: 50 # save every 50 epochs in ./logs/${savedir}/pictures
+      savedir: ${runtime.logdir}
