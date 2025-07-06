@@ -1,0 +1,67 @@
+name: SHORTCUT_LV_10e5
+project: better-sbi
+
+dim_flow: 4
+dim_conditioning: 20
+dim_network: 25
+
+batch_size: 256
+
+learning_rate: 0.001
+
+hidden_dims: [32, 64, 128, 256, 512, 512, 512, 512, 512, 256, 128, 64, 32]
+
+data:
+  target: sbisim.data.benchmarks.LotkaVolterraJax
+  _file: configs/datasets/benchmarks/10e5_dataset.yaml
+
+strategy:
+  target: sbisim.strategy.FlowMap
+  params:
+    dim_flow: ${dim_flow}
+    dim_conditioning: ${dim_conditioning}
+    sampler:
+      target: sbisim.strategy.improved_inference.FlowMapSampler
+      params:
+        t_0: 0.0
+        t_1: 1.0
+    paths:
+      name: optimal_transport
+      params:
+        sigma_min: 1e-4
+    model:
+      target: sbisim.flows.models.fmpe.ShortcutMLP
+      params:
+        hidden_dims: ${hidden_dims}
+        out_dim: ${dim_flow}
+        in_dim: ${dim_network}
+        activation_fn: gelu
+
+training:
+  num_epochs: 200
+  num_steps_per_epoch: 2000
+  batch_size: ${batch_size}
+  early_stopping:
+    patience: 50
+
+test:
+  active: True
+  tests:
+    c2st:
+      target: sbisim.callbacks.C2ST
+
+patience: 3
+optimization:
+  _file: configs/optimization/adam_reduce_lr_ema.yaml
+
+callbacks:
+  checkpoint:
+    target: sbisim.callbacks.checkpoint.Checkpoint
+    params:
+      savedir: ${runtime.logdir}
+      key: val_loss
+  scatter:
+    target: sbisim.callbacks.BenchmarkScatterPlot
+    params:
+      save_every: 50
+      savedir: ${runtime.logdir}

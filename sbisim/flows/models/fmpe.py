@@ -357,6 +357,47 @@ class DenseResidualNet(nn.Module):
 
         return x
 
+class ShortcutMLP(nn.Module):
+
+    hidden_dims: List[int]
+    out_dim: int
+    in_dim: int
+    activation_fn: str = 'elu'
+
+    def setup(self):
+
+        self.model = DenseResidualNet(
+            hidden_dims=self.hidden_dims,
+            out_dim=self.out_dim,
+            in_dim=self.in_dim,
+            context_dim=0,
+            activation_fn=self.activation_fn
+        )
+
+    def __call__(self, x, y, t, d, train=True):
+
+        if not isinstance(t, jnp.ndarray):
+            t = jnp.array([t], dtype=x.dtype)
+        elif isinstance(t, jnp.ndarray) and len(t.shape) == 0:
+            t = t.astype(dtype=x.dtype)
+            t = jnp.expand_dims(t, 0)
+        if len(t.shape) == 1:
+            t = jnp.expand_dims(t, 1)
+
+        if not isinstance(d, jnp.ndarray):
+            d = jnp.array([d], dtype=x.dtype)
+        elif isinstance(d, jnp.ndarray) and len(d.shape) == 0:
+            d = d.astype(dtype=x.dtype)
+            d = jnp.expand_dims(d, 0)
+        if len(d.shape) == 1:
+            d = jnp.expand_dims(d, 1)
+
+        x = jnp.concatenate([x, t, d, y], axis=-1)
+
+        x = self.model(x, context=None, train=train)
+
+        return x
+
 class BenchmarkFMPE(ContinuousNormalizingFlow):
 
     hidden_dim: int = 64
