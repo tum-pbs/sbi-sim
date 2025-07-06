@@ -228,6 +228,72 @@ class SGLDSampler(BaseSampler):
 
         return self._inference(x, model, params, rng, conditioning)
 
+class FlowMapSampler(BaseSampler):
+
+    def __init__(self, num_steps: int = 10,
+                 t_0: float = 0.0, t_1: float = 1.0, rtol: float = 1e-5, mode: str = 'none',
+                 atol: float = 1e-5, sigma_init: float = 1.0, sigma_rescale: float = 0.0,):
+
+        self.num_steps = num_steps
+        self.t_0 = t_0
+        self.t_1 = t_1
+        self.sigma_rescale = sigma_rescale
+        self.sigma_init = sigma_init
+        self.prob_wrapper = get_prob_wrapper('none')
+
+    def rescale(self, x: jnp.ndarray, rng: jr.PRNGKey):
+        x = x + jr.normal(rng, x.shape) * self.sigma_rescale
+        rng = jr.split(rng)[0]
+        return x, rng
+
+    def compute_likelihood(self, x: jnp.ndarray, model: nn.Module, params: PyTree, rng: jr.PRNGKey,
+                           conditioning: Union[Tuple[jnp.ndarray], PyTree]) -> PyTree:
+
+        return self._inference(x, model, params, rng, conditioning, backward=False)
+
+    def _inference(self, x: jnp.ndarray, model: nn.Module, params: PyTree, rng: jr.PRNGKey,
+                   conditioning: Union[Tuple[jnp.ndarray], PyTree], backward=False) -> Tuple[PyTree, jr.PRNGKey]:
+
+        data_dict = {
+            'trajectory': [],
+            'features': [],
+            'gradient': [],
+            'nll': []
+        }
+
+        rng_apply, rng = generate_apply_rngs(rng)
+
+        if backward:
+            t = jnp.repeat(jnp.array([self.t_1]), x.shape[0])
+            d = jnp.ones_like(t) * (- self.t_1 + self.t_0)
+        else:
+            t = jnp.repeat(jnp.array([self.t_0]), x.shape[0])
+            d = jnp.ones_like(t) * (self.t_1 - self.t_0)
+
+        x = model.apply(params,x, conditioning, t, d, rngs=rng_apply)
+
+        data_dict['samples'] = x
+
+        data_dict = {k: jnp.array(v) for k, v in data_dict.items()}
+
+        return data_dict, rng
+
+    def sample(self, num_samples: int, dim: int, model: nn.Module, params: PyTree, rng: jr.PRNGKey,
+               z_init: Optional[jnp.ndarray], conditioning: Union[Tuple[jnp.ndarray], PyTree], ) -> Tuple[
+        PyTree, jr.PRNGKey]:
+
+        if z_init is not None:
+            x_init = z_init
+        else:
+            x_init = self.sigma_init * jr.normal(rng, (num_samples, dim))
+            rng = jr.split(rng)[0]
+
+        return self._inference(x_init, model, params, rng, conditioning)
+
+    def forward(self, x: jnp.ndarray, model: nn.Module, params: PyTree, rng: jr.PRNGKey,
+                conditioning: Union[Tuple[jnp.ndarray], PyTree]) -> Tuple[PyTree, jr.PRNGKey]:
+
+        return self._inference(x, model, params, rng, conditioning)
 
 
 class ODESolver(BaseSampler):
