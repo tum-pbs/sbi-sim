@@ -6,6 +6,7 @@ from . import (
 )
 
 from .optimization import OptimizerWrapper, OptState, Optimization
+from .ema import EMA
 
 _all__ = [
     'OptimizerWrapper',
@@ -15,4 +16,5 @@ _all__ = [
     'schedules',
     'adam',
     'ema'
+    'EMA'
 ]
