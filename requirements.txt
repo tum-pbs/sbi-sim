@@ -15,3 +15,4 @@ corner
 orbax
 pandas
 astropy
+seaborn

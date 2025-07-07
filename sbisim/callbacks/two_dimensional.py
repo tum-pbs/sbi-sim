@@ -9,15 +9,16 @@ import jax.random as jr
 
 from ..data.density_estimation.golden_ratio import fibonacci_ratio, get_centers
 
-# from source.data.dataloader import DataLoader
 from ..strategy import Strategy
-
 from matplotlib import pyplot as plt
-
 import jax.numpy as jnp
 from tqdm import tqdm
-
 import seaborn as sns
+
+
+class DataLoader:
+    pass
+
 
 class TwoDimensionalPlot(Callback):
 
@@ -26,11 +27,12 @@ class TwoDimensionalPlot(Callback):
     num_samples: int = 3000
     num_samples_gt: int = 3000
 
-    def __init__(self, save_every: int = 10, num_samples: int = 3000):
+    def __init__(self, save_every: int = 10, num_samples: int = 3000, savedir: str = None):
         super(self.__class__, self).__init__()
 
         self.save_every = save_every
         self.num_samples = num_samples
+        self.savedir = savedir
 
 
     def __call__(self, logs: dict, rng: jr.PRNGKey, *args, **kwargs):
@@ -59,7 +61,11 @@ class TwoDimensionalPlot(Callback):
 
             ax.scatter(x[:self.num_samples_gt], y[:self.num_samples_gt])
 
+            if self.savedir is not None:
+                plt.savefig(f"{self.savedir}/pictures/samples_gt.png")
+
             logs[f'samples_gt'] = wandb.Image(fig)
+
 
             plt.close(fig)
 
@@ -75,6 +81,15 @@ class TwoDimensionalPlot(Callback):
         fig, ax = plt.subplots()
         ax.scatter(x, y)
 
+        epoch = logs.get("epoch", 0)
+        if self.savedir is not None:
+
+            import os
+            # create directory if it does not exist
+            os.makedirs(f"{self.savedir}/pictures", exist_ok=True)
+
+            plt.savefig(f"{self.savedir}/pictures/samples_{epoch}.png")
+
         logs[f'samples'] = wandb.Image(fig)
 
         plt.close(fig)
@@ -83,6 +98,9 @@ class TwoDimensionalPlot(Callback):
 
     def on_train_begin(self, *args, **kwargs):
         return self.__call__(*args, init=True, **kwargs)
+
+    def on_test(self, *args, **kwargs):
+        return self.__call__(*args, init=False, **kwargs)
 
     def on_epoch_end(self, logs: dict, rng: jr.PRNGKey, *args, **kwargs):
 

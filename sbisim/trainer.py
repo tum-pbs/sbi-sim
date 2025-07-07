@@ -84,6 +84,14 @@ class TrainerModule:
 
         print("Number of parameters: ", wandb.run.summary["num_params"])
 
+        # Check if JAX is using GPU
+        from jax.lib import xla_bridge
+        platform = xla_bridge.get_backend().platform
+        if platform == 'gpu':
+            print("JAX is using GPU")
+        else:
+            print(f"JAX is using {platform}")
+
     def pack_(self):
         self.strategy.bind(self.opt.get_params())
         return {'rng': self.callback_rng, 'strategy': self.strategy,
@@ -212,14 +220,6 @@ class TrainerModule:
                 step_ += 1
                 if step_ >= num_val_batches:
                     break
-                
-            # Check if JAX is using GPU
-            from jax.lib import xla_bridge
-            platform = xla_bridge.get_backend().platform
-            if platform == 'gpu':
-                print("JAX is using GPU")
-            else:
-                print(f"JAX is using {platform}")
 
             avg_loss /= step_
 
