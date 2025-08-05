@@ -66,29 +66,35 @@ class TwoDimensionalPlot(Callback):
 
             logs[f'samples_gt'] = wandb.Image(fig)
 
-
             plt.close(fig)
 
         sample_fn = strategy.sample
 
         conditioning = jnp.zeros((self.num_samples, 0))
-        samples, rng = sample_fn(self.num_samples, rng, z_init=None, conditioning=conditioning)
 
-        X = samples['samples']
+        fig, axes = plt.subplots(nrows=1, ncols=5, figsize=(20, 4))
 
-        x, y = X[:, 0], X[:, 1]
+        for i, steps in enumerate([1, 2, 4, 8, 16]):
 
-        fig, ax = plt.subplots()
-        ax.scatter(x, y)
+            samples, rng = sample_fn(self.num_samples, rng, z_init=None, conditioning=conditioning,
+                                     num_steps=steps)
+
+            X = samples['samples']
+
+            x, y = X[:, 0], X[:, 1]
+
+            axes[i].scatter(x, y)
+            axes[i].set_title(f"steps={steps}")
 
         epoch = logs.get("epoch", 0)
+
         if self.savedir is not None:
 
             import os
             # create directory if it does not exist
             os.makedirs(f"{self.savedir}/pictures", exist_ok=True)
 
-            plt.savefig(f"{self.savedir}/pictures/samples_{epoch}.png")
+            plt.savefig(f"{self.savedir}/pictures/samples_{epoch}.pdf")
 
         logs[f'samples'] = wandb.Image(fig)
 

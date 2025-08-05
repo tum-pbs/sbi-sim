@@ -12,4 +12,4 @@ scheduler:
 ema:
     target: sbisim.optimization.EMA
     params:
-        decay: 0.9999
+        decay: 0.99

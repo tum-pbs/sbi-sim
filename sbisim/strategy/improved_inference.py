@@ -1,6 +1,7 @@
 from abc import abstractmethod, ABC
 from functools import partial
 from typing import Union, Tuple, Optional, Dict
+
 from jax.scipy.stats.norm import logpdf
 from diffrax import diffeqsolve, ODETerm, ConstantStepSize, PIDController, SaveAt
 from flax.core import FrozenDict
@@ -15,6 +16,7 @@ from jaxtyping import PyTree
 
 from ..flows.cnf import no_logp_wrapper, get_solver, get_prob_wrapper, get_stepsize_controller
 from ..utils import instantiate_from_config, generate_apply_rngs
+
 
 class BaseSampler(ABC):
 
@@ -67,6 +69,7 @@ class LinearSchedule(SigmaSchedule):
         rng = jr.split(rng)[0]
         return sample, rng
 
+
 class SGLDSampler(BaseSampler):
 
     def __init__(self, path: Dict, init_stepsize: float = 0.1, t_0: float = 0.0,
@@ -101,7 +104,6 @@ class SGLDSampler(BaseSampler):
         x = x + jr.normal(rng, x.shape) * self.sigma_rescale
         rng = jr.split(rng)[0]
         return x, rng
-
 
     def flow_to_score(self, x: jnp.ndarray, t: jnp.ndarray):
 
@@ -155,8 +157,7 @@ class SGLDSampler(BaseSampler):
 
                 data_dict['trajectory'] = data_dict['trajectory'].at[i].set(x)
 
-            for _ in range(self.correction_steps-1):
-
+            for _ in range(self.correction_steps - 1):
                 epsilon = jr.normal(rng, x.shape)
                 rng = jr.split(rng)[0]
 
@@ -190,22 +191,21 @@ class SGLDSampler(BaseSampler):
                 x = x + score * eps
 
                 if not final:
-
                     x = x + epsilon * jnp.sqrt(2 * eps)
 
-            return data_dict, x, conditioning, t+self.init_stepsize, params, rng
+            return data_dict, x, conditioning, t + self.init_stepsize, params, rng
 
         # LOOP 0 to num_steps-1
 
         data_dict, x, conditioning, t, params, rng = jax.lax.fori_loop(0, self.num_steps - 1, loop_body,
-                                                                         (data_dict, x, conditioning,
-                                                                          self.t_0, params, rng))
+                                                                       (data_dict, x, conditioning,
+                                                                        self.t_0, params, rng))
 
         # FINAL ITERATION
 
         data_dict, x, conditioning, t, params, rng = loop_body(self.num_steps - 1,
-                                                                 (data_dict, x, conditioning, t, params, rng),
-                                                                 final=True)
+                                                               (data_dict, x, conditioning, t, params, rng),
+                                                               final=True)
 
         data_dict['samples'] = x
 
@@ -228,13 +228,19 @@ class SGLDSampler(BaseSampler):
 
         return self._inference(x, model, params, rng, conditioning)
 
+
 class FlowMapSampler(BaseSampler):
 
-    def __init__(self, num_steps: int = 10,
+    def __init__(self, num_steps: int = 1, base_steps: int = 128,
                  t_0: float = 0.0, t_1: float = 1.0, rtol: float = 1e-5, mode: str = 'none',
-                 atol: float = 1e-5, sigma_init: float = 1.0, sigma_rescale: float = 0.0,):
+                 atol: float = 1e-5, sigma_init: float = 1.0, sigma_rescale: float = 0.0, ):
 
+        self.base_steps = base_steps
         self.num_steps = num_steps
+
+        assert base_steps == num_steps or (base_steps // num_steps) % 2 == 0, \
+            f"num_steps {num_steps} needs to be a power of two and divide base_steps {base_steps}"
+
         self.t_0 = t_0
         self.t_1 = t_1
         self.sigma_rescale = sigma_rescale
@@ -252,7 +258,7 @@ class FlowMapSampler(BaseSampler):
         return self._inference(x, model, params, rng, conditioning, backward=False)
 
     def _inference(self, x: jnp.ndarray, model: nn.Module, params: PyTree, rng: jr.PRNGKey,
-                   conditioning: Union[Tuple[jnp.ndarray], PyTree], backward=False) -> Tuple[PyTree, jr.PRNGKey]:
+                   conditioning: Union[Tuple[jnp.ndarray], PyTree], num_steps: int = 100, backward=False) -> Tuple[PyTree, jr.PRNGKey]:
 
         data_dict = {
             'trajectory': [],
@@ -261,26 +267,46 @@ class FlowMapSampler(BaseSampler):
             'nll': []
         }
 
+        dt_base = jnp.log2(num_steps)
+        dt = 1 / (2 ** dt_base)
+        dt = jnp.repeat(dt, x.shape[0])
+        dt_base = jnp.repeat(dt_base, x.shape[0])
+
         rng_apply, rng = generate_apply_rngs(rng)
+        steps = jnp.linspace(self.t_0, self.t_1, num_steps)
 
-        if backward:
-            t = jnp.repeat(jnp.array([self.t_1]), x.shape[0])
-            d = jnp.ones_like(t) * (- self.t_1 + self.t_0)
-        else:
-            t = jnp.repeat(jnp.array([self.t_0]), x.shape[0])
-            d = jnp.ones_like(t) * (self.t_1 - self.t_0)
+        def loop_body(iteration, values):
 
-        x = model.apply(params,x, conditioning, t, d, rngs=rng_apply)
+            x_, steps_, conditioning_, dt_base_, dt_, params_, rng_ = values
+
+            t_ = jnp.repeat(jnp.array([steps_[iteration]]), x_.shape[0])
+
+            v_ = model.apply(params_, x_, conditioning_, t_, dt_base_, rngs=rng_)
+            rng_ = jr.split(rng_)[0]
+
+            x_ = x_ + jnp.einsum('ij,i->ij', v_, dt_)
+
+            values = (
+                x_, steps_, conditioning_, dt_base_, dt_, params_, rng_
+            )
+
+            return values
+
+        x, _, _, _, _, _, rng = jax.lax.fori_loop(0, num_steps, loop_body,
+                                                                         (x, steps, conditioning, dt_base, dt,
+                                                                                 params, rng))
 
         data_dict['samples'] = x
-
         data_dict = {k: jnp.array(v) for k, v in data_dict.items()}
 
         return data_dict, rng
 
     def sample(self, num_samples: int, dim: int, model: nn.Module, params: PyTree, rng: jr.PRNGKey,
-               z_init: Optional[jnp.ndarray], conditioning: Union[Tuple[jnp.ndarray], PyTree], ) -> Tuple[
+               z_init: Optional[jnp.ndarray], conditioning: Union[Tuple[jnp.ndarray], PyTree], num_steps: Optional[int] = None) -> Tuple[
         PyTree, jr.PRNGKey]:
+
+        if num_steps is None:
+            num_steps = self.num_steps
 
         if z_init is not None:
             x_init = z_init
@@ -288,7 +314,7 @@ class FlowMapSampler(BaseSampler):
             x_init = self.sigma_init * jr.normal(rng, (num_samples, dim))
             rng = jr.split(rng)[0]
 
-        return self._inference(x_init, model, params, rng, conditioning)
+        return self._inference(x_init, model, params, rng, conditioning, num_steps=num_steps)
 
     def forward(self, x: jnp.ndarray, model: nn.Module, params: PyTree, rng: jr.PRNGKey,
                 conditioning: Union[Tuple[jnp.ndarray], PyTree]) -> Tuple[PyTree, jr.PRNGKey]:
@@ -300,7 +326,7 @@ class ODESolver(BaseSampler):
 
     def __init__(self, solver_name: str = 'euler', init_stepsize: float = 0.1, num_steps: int = 10,
                  stepsize_controller_name: str = 'constant', t_0: float = 0.0, t_1: float = 1.0, rtol: float = 1e-5,
-                 atol: float = 1e-5, mode: str = 'none', sigma_init: float = 1.0, sigma_rescale: float = 0.0,):
+                 atol: float = 1e-5, mode: str = 'none', sigma_init: float = 1.0, sigma_rescale: float = 0.0, ):
 
         self.solver_name = solver_name
         self.init_stepsize = init_stepsize
@@ -335,7 +361,7 @@ class ODESolver(BaseSampler):
         return ode_fn
 
     def _inference(self, x: jnp.ndarray, model: nn.Module, params: PyTree, rng: jr.PRNGKey,
-                   conditioning: Union[Tuple[jnp.ndarray], PyTree], backward=False) -> Tuple[PyTree, jr.PRNGKey]:
+                   conditioning: Union[Tuple[jnp.ndarray], PyTree], backward=False, num_steps: int = 100) -> Tuple[PyTree, jr.PRNGKey]:
 
         data_dict = {
             'trajectory': [],
@@ -354,14 +380,16 @@ class ODESolver(BaseSampler):
 
         rng_apply, rng = generate_apply_rngs(rng)
 
+        stepsize = 1 / num_steps
+
         if backward:
 
             y = (x, jnp.zeros(x.shape[0]))
 
-            saveat = SaveAt(ts=jnp.linspace(self.t_1, self.t_0, self.num_steps))
+            saveat = SaveAt(ts=jnp.linspace(self.t_1, self.t_0, num_steps))
 
             sol = diffeqsolve(self.term, self.solver, t0=self.t_1, t1=self.t_0,
-                              dt0= - self.init_stepsize, saveat=saveat,
+                              dt0=-stepsize, saveat=saveat,
                               y0=y, args=(conditioning, eps, ode_fn, params, rng_apply),
                               stepsize_controller=self.stepsize_controller)
 
@@ -374,9 +402,9 @@ class ODESolver(BaseSampler):
 
             y = (x, prob_x)
 
-            saveat = SaveAt(ts=jnp.linspace(self.t_0, self.t_1, self.num_steps))
+            saveat = SaveAt(ts=jnp.linspace(self.t_0, self.t_1, num_steps))
 
-            sol = diffeqsolve(self.term, self.solver, t0=self.t_0, t1=self.t_1, dt0=self.init_stepsize,
+            sol = diffeqsolve(self.term, self.solver, t0=self.t_0, t1=self.t_1, dt0=stepsize,
                               saveat=saveat, y0=y, args=(conditioning, eps, ode_fn, params, rng_apply),
                               stepsize_controller=self.stepsize_controller)
 
@@ -412,23 +440,26 @@ class PriorODESolver(ODESolver):
 
     def __init__(self, prior: Dict, solver_name: str = 'euler', init_stepsize: float = 0.1, num_steps: int = 10,
                  stepsize_controller_name: str = 'constant', t_0: float = 0.0, t_1: float = 1.0, rtol: float = 1e-5,
-                 atol: float = 1e-5, mode: str = 'none', sigma_init: float = 1.0, sigma_rescale: float = 0.0,):
+                 atol: float = 1e-5, mode: str = 'none', sigma_init: float = 1.0, sigma_rescale: float = 0.0, ):
 
         super().__init__(solver_name, init_stepsize, num_steps, stepsize_controller_name, t_0, t_1, rtol, atol,
-                              mode, sigma_init, sigma_rescale)
+                         mode, sigma_init, sigma_rescale)
 
         self.prior = instantiate_from_config(prior)
 
     def sample(self, num_samples: int, dim: int, model: nn.Module, params: PyTree, rng: jr.PRNGKey,
-               z_init: Optional[jnp.ndarray], conditioning: Union[Tuple[jnp.ndarray], PyTree], ) -> Tuple[
-        PyTree, jr.PRNGKey]:
+               z_init: Optional[jnp.ndarray], conditioning: Union[Tuple[jnp.ndarray], PyTree],
+               num_steps: Optional[int] = 100) -> Tuple[PyTree, jr.PRNGKey]:
+
+        if num_steps is None:
+            num_steps = self.num_steps
 
         if z_init is not None:
             x_init = z_init
         else:
             x_init, rng = self.prior.sample(rng, num_samples)
 
-        return self._inference(x_init, model, params, rng, conditioning)
+        return self._inference(x_init, model, params, rng, conditioning, num_steps = num_steps)
 
 
 class FastCorrectorSampler(BaseSampler):
@@ -453,7 +484,6 @@ class FastCorrectorSampler(BaseSampler):
                            conditioning: Union[Tuple[jnp.ndarray], PyTree]) -> PyTree:
 
         return self._inference(x, model, params, rng, conditioning, backward=False)
-
 
     def _inference(self, x: jnp.ndarray, model: nn.Module, params: PyTree, rng: jr.PRNGKey,
                    conditioning: Union[Tuple[jnp.ndarray], PyTree], backward=False) -> Tuple[PyTree, jr.PRNGKey]:
@@ -504,10 +534,10 @@ class FastCorrectorSampler(BaseSampler):
         loop_body_no_correction = partial(loop_body, corrected=False)
 
         x, t, rng = jax.lax.fori_loop(0, iteration_phase_1, loop_body_no_correction,
-                                                      (x, t, rng))
+                                      (x, t, rng))
 
         x, t, rng = jax.lax.fori_loop(iteration_phase_1, iteration_phase_2, loop_body_corrected,
-                                                        (x, t, rng))
+                                      (x, t, rng))
 
         data_dict['samples'] = x
         data_dict = {k: jnp.array(v) for k, v in data_dict.items()}
@@ -527,13 +557,12 @@ class FastCorrectorSampler(BaseSampler):
         return self._inference(x_init, model, params, rng, conditioning)
 
 
-
 class SelfConditionedSampler(BaseSampler):
     """
     Sampler solver with prior as initial condition and self-conditioning for the model
     """
 
-    def __init__(self, prior:Dict, num_steps: int, t_0: float = 0.0, t_1: float = 1.0):
+    def __init__(self, prior: Dict, num_steps: int, t_0: float = 0.0, t_1: float = 1.0):
         self.num_steps = num_steps
         self.t_0 = t_0
         self.t_1 = t_1
@@ -549,7 +578,6 @@ class SelfConditionedSampler(BaseSampler):
                            conditioning: Union[Tuple[jnp.ndarray], PyTree]) -> PyTree:
 
         return self._inference(x, model, params, rng, conditioning, backward=False)
-
 
     def _inference(self, x: jnp.ndarray, model: nn.Module, params: PyTree, rng: jr.PRNGKey,
                    conditioning: Union[Tuple[jnp.ndarray], PyTree], backward=False) -> Tuple[PyTree, jr.PRNGKey]:
@@ -570,7 +598,6 @@ class SelfConditionedSampler(BaseSampler):
         t = jnp.repeat(jnp.array([self.t_0]), x.shape[0])
 
         def loop_body(i, vals):
-
             x, x_pred, t, rng = vals
 
             flow, x_pred = ode_fn(t, [x, x_pred], conditioning, params)
@@ -585,7 +612,7 @@ class SelfConditionedSampler(BaseSampler):
             return x, x_pred, t, rng
 
         x, x_pred, t, rng = jax.lax.fori_loop(0, self.num_steps, loop_body,
-                                                      (x, x_pred, t, rng))
+                                              (x, x_pred, t, rng))
 
         data_dict['samples'] = x
         data_dict = {k: jnp.array(v) for k, v in data_dict.items()}
@@ -824,7 +851,6 @@ class DDIM(BaseSampler):
         rng = jr.split(rng)[0]
         return x, rng
 
-
     def flow_to_score(self, x: jnp.ndarray, t: jnp.ndarray):
 
         scaling = 1 / (self.path.grad_sigma(t))
@@ -877,8 +903,7 @@ class DDIM(BaseSampler):
 
                 data_dict['trajectory'] = data_dict['trajectory'].at[i].set(x)
 
-            for _ in range(self.correction_steps-1):
-
+            for _ in range(self.correction_steps - 1):
                 epsilon = jr.normal(rng, x.shape)
                 rng = jr.split(rng)[0]
 
@@ -912,22 +937,21 @@ class DDIM(BaseSampler):
                 x = x + score * eps
 
                 if not final:
-
                     x = x + epsilon * jnp.sqrt(2 * eps)
 
-            return data_dict, x, conditioning, t+self.init_stepsize, params, rng
+            return data_dict, x, conditioning, t + self.init_stepsize, params, rng
 
         # LOOP 0 to num_steps-1
 
         data_dict, x, conditioning, t, params, rng = jax.lax.fori_loop(0, self.num_steps - 1, loop_body,
-                                                                         (data_dict, x, conditioning,
-                                                                          self.t_0, params, rng))
+                                                                       (data_dict, x, conditioning,
+                                                                        self.t_0, params, rng))
 
         # FINAL ITERATION
 
         data_dict, x, conditioning, t, params, rng = loop_body(self.num_steps - 1,
-                                                                 (data_dict, x, conditioning, t, params, rng),
-                                                                 final=True)
+                                                               (data_dict, x, conditioning, t, params, rng),
+                                                               final=True)
 
         data_dict['samples'] = x
 

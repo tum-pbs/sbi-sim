@@ -1,4 +1,4 @@
-name: checkerboard-fm-2
+name: checkerboard-flowmap-fm
 project: flowmaps
 
 dim_flow: 2
@@ -19,37 +19,18 @@ data:
   _file: configs/datasets/2d/checkerboard.yaml
 
 strategy:
-  target: sbisim.strategy.ConditionalFlowMatching
+  target: sbisim.strategy.FlowMap
   params:
     dim_flow: ${dim_flow}
     dim_conditioning: ${dim_conditioning}
-    weighting: ${weighting}
-    loss_type: ${loss_type}
-    scaling_type: ${scaling_type}
-    time_alpha: 4
-    bandwidth: 0.01
-    prior:
-      target: sbisim.strategy.distributions.get_normal_gaussian_prior
-      params:
-        shape: [ 2 ]
     sampler:
-      target: sbisim.strategy.improved_inference.PriorODESolver
+      target: sbisim.strategy.improved_inference.FlowMapSampler
       params:
-        prior:
-          target: sbisim.strategy.distributions.get_normal_gaussian_prior
-          params:
-            shape: [ 2 ]
-        solver_name: euler
-        init_stepsize: 0.5
-    schedule:
-        target: sbisim.strategy.get_paths
-        params:
-          paths:
-            name: optimal_transport
-            params:
-              sigma_min: 1e-4
+        num_steps: 1
+        t_0: 0.0
+        t_1: 1.0
     model:
-      target: sbisim.flows.models.fmpe.SBIResidualNet
+      target: sbisim.flows.models.fmpe.ShortcutMLP
       params:
         hidden_dims: ${hidden_dims}
         out_dim: ${dim_flow}
@@ -71,7 +52,6 @@ test:
       target: sbisim.callbacks.TwoDimensionalPlot
       params:
         savedir: ${runtime.logdir}
-
 
 patience: 3
 optimization:

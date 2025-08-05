@@ -309,8 +309,10 @@ class ConditionalFlowMatching(Strategy, ABC):
         return opt_state, rng, logs
 
     @partial(jit, static_argnums=(0, 5,))
-    def eval_step(self, params: PyTree, rng: jr.PRNGKey, logs: Dict[str, Any],
+    def eval_step(self, opt_state: PyTree, rng: jr.PRNGKey, logs: Dict[str, Any],
                   batch: PyTree, testing: bool) -> Tuple[jr.PRNGKey, Dict[str, Any]]:
+
+        params = self.opt.get_params_from_state(opt_state)
 
         loss, rng = self.loss_fn(params, rng, batch)
 
@@ -334,7 +336,7 @@ class ConditionalFlowMatching(Strategy, ABC):
             x, self.scaled_model, {'params': params}, rng, *args, **kwargs
         )
 
-    @partial(jit, static_argnums=(0, 2))
+    @partial(jit, static_argnums=(0, 2), static_argnames=("num_steps",))
     def _sample(self, params: PyTree, num_samples: int, rng: jr.PRNGKey,
                 *args, **kwargs) -> Tuple[PyTree, jr.PRNGKey]:
 

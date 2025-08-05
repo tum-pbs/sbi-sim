@@ -212,7 +212,7 @@ class TrainerModule:
             step_ = 0
             for batch in p:
 
-                rng, logs = self.strategy.eval_step(self.opt.get_params_from_state(opt_state),
+                rng, logs = self.strategy.eval_step(opt_state,
                                                     rng, logs, batch, testing=False)
                 avg_loss += logs['val/loss']
                 p.set_description(f'{self.epoch}/{self.num_epochs} val loss: {avg_loss/(step_+1):.3f}')

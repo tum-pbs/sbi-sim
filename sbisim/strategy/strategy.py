@@ -33,7 +33,7 @@ class Strategy(ABC):
         pass
 
     @abstractmethod
-    def eval_step(self, params: PyTree, rng: jr.PRNGKey, logs: Dict[str, Any],
+    def eval_step(self, opt_state: PyTree, rng: jr.PRNGKey, logs: Dict[str, Any],
                   batch: PyTree, testing: bool):
         pass
 

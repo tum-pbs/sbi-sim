@@ -39,14 +39,16 @@ class OptimizerWrapper(ABC):
 class OptState:
 
     params: PyTree
+    ema_params: PyTree
     state: PyTree
 
-    def __init__(self, params, state):
+    def __init__(self, params, ema_params, state):
         self.params = params
+        self.ema_params = ema_params
         self.state = state
 
     def tree_flatten(self):
-        children = (self.params, self.state)
+        children = (self.params, self.ema_params, self.state)
         aux_data = None
         return (children, aux_data)
 
@@ -74,8 +76,6 @@ class Optimization:
         self.params = None
 
     def init(self, params):
-        if self.ema_active:
-            self.ema.init(params)
 
         self.state = self.optimizer.init(params)
         self.state = tree_util.tree_map(lambda x: jnp.array(x), self.state)
@@ -109,11 +109,8 @@ class Optimization:
     def get_params_from_state(self, state):
         return self.optimizer.get_params(state)
 
-    def get_params_ema(self):
-        if self.ema_active:
-            return self.ema.get_params()
-        else:
-            return None
+    def get_ema_params_from_state(self, state):
+        return self.ema.get_params(state)
 
     def update_scheduler(self, i, logs):
 
@@ -125,7 +122,7 @@ class Optimization:
 
         opt_state = self.optimizer.update(i, opt_state, grads)
 
-        if self.ema_active:
-            self.ema.update(i, self.get_params_from_state(opt_state))
+        if self.ema_active and self.ema is not None:
+            opt_state = self.ema.update(i, opt_state)
 
         return opt_state
