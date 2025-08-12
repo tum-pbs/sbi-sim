@@ -38,7 +38,7 @@ strategy:
         activation_fn: gelu
 
 training:
-  num_epochs: 200
+  num_epochs: 22
   num_steps_per_epoch: 2000
   batch_size: ${batch_size}
   early_stopping:

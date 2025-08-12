@@ -233,10 +233,11 @@ class FlowMapSampler(BaseSampler):
 
     def __init__(self, num_steps: int = 1, base_steps: int = 128,
                  t_0: float = 0.0, t_1: float = 1.0, rtol: float = 1e-5, mode: str = 'none',
-                 atol: float = 1e-5, sigma_init: float = 1.0, sigma_rescale: float = 0.0, ):
+                 atol: float = 1e-5, sigma_init: float = 1.0, sigma_rescale: float = 0.0, dt_base_steps: Optional[int] = None):
 
         self.base_steps = base_steps
         self.num_steps = num_steps
+        self.dt_base_steps = dt_base_steps
 
         assert base_steps == num_steps or (base_steps // num_steps) % 2 == 0, \
             f"num_steps {num_steps} needs to be a power of two and divide base_steps {base_steps}"
@@ -270,7 +271,16 @@ class FlowMapSampler(BaseSampler):
         dt_base = jnp.log2(num_steps)
         dt = 1 / (2 ** dt_base)
         dt = jnp.repeat(dt, x.shape[0])
-        dt_base = jnp.repeat(dt_base, x.shape[0])
+
+        if self.dt_base_steps is None:
+
+            dt_base = jnp.repeat(dt_base, x.shape[0])
+
+        else:
+
+            dt_base = jnp.log2(self.dt_base_steps)
+            dt_base = jnp.repeat(dt_base, x.shape[0])
+
 
         rng_apply, rng = generate_apply_rngs(rng)
         steps = jnp.linspace(self.t_0, self.t_1, num_steps)
