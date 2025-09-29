@@ -1,0 +1,70 @@
+name: checkerboard-flowmap-consistency-training-1
+project: flowmaps
+
+dim_flow: 2
+dim_conditioning: 0
+dim_network: 2
+batch_size: 256
+
+weighting: 'one'
+loss_type: 'fm_ot'
+scaling_type: 'none'
+
+learning_rate: 0.001
+
+hidden_dims: [32, 64, 128, 256, 128, 64, 32]
+
+data:
+  target: sbisim.data.benchmarks.density_estimation.ToyDataset
+  _file: configs/datasets/2d/checkerboard.yaml
+
+strategy:
+  target: sbisim.strategy.FlowMap
+  params:
+    dim_flow: ${dim_flow}
+    dim_conditioning: ${dim_conditioning}
+    sampler:
+      target: sbisim.strategy.improved_inference.FlowMapSampler
+      params:
+        num_steps: 1
+        t_0: 0.0
+        t_1: 1.0
+        dt_base_steps: 128
+        mode: 'consistency'
+    model:
+      target: sbisim.flows.models.fmpe.ShortcutMLP
+      params:
+        hidden_dims: ${hidden_dims}
+        out_dim: ${dim_flow}
+        in_dim: ${dim_network}
+        activation_fn: gelu
+    method: 'consistency_training'
+    teacher_params_weight_file: '/home/holzschuh/projects/remote/sbi-sim/logs/checkerboard-flowmap-fm/'
+    max_epochs: 25
+
+num_steps: 10000
+training:
+  num_epochs: 25
+  num_steps_per_epoch: ${num_steps}
+  batch_size: ${batch_size}
+  early_stopping:
+    patience: 50
+
+test:
+  active: True
+  tests:
+    scatter:
+      target: sbisim.callbacks.TwoDimensionalPlot
+      params:
+        savedir: ${runtime.logdir}
+
+patience: 3
+optimization:
+  _file: configs/optimization/adam_reduce_lr_ema.yaml
+
+callbacks:
+  checkpoint:
+    target: sbisim.callbacks.checkpoint.Checkpoint
+    params:
+      savedir: ${runtime.logdir}
+      key: val_loss

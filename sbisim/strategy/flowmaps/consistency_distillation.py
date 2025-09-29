@@ -20,7 +20,7 @@ def get_targets(FLAGS, key,  model, params, batch,
     # 1) =========== Sample t. ============
     t = jax.random.randint(time_key, (batch_size,), minval=0, maxval=FLAGS.model['denoise_timesteps']).astype(jnp.float32)
     t /= FLAGS.model['denoise_timesteps']
-    t_full = t[:, None, None, None] # [batch, 1, 1, 1]
+    t_full = jnp.expand_dims(t, axis=(1,))
 
     # 2) =========== Generate Bootstrap Targets ============
     x_1 = x_samples
@@ -39,8 +39,8 @@ def get_targets(FLAGS, key,  model, params, batch,
     v_b2 = call_model_fn(x_t2, y_samples, t, dt_base, train=False)
     # v_b2 = train_state.call_model_ema(x_t2, t2, dt_base, labels, train=False)
 
-    pred_x1 = x_t2 + (1 - t2[:, None, None, None]) * v_b2
-    v_target = (pred_x1 - x_t) / (1 - t[:, None, None, None])
+    pred_x1 = x_t2 + (1 - jnp.expand_dims(t2, axis=(1,))) * v_b2
+    v_target = (pred_x1 - x_t) / (1 - jnp.expand_dims(t, axis=(1,)))
 
     info['v_magnitude_bootstrap'] = jnp.sqrt(jnp.mean(jnp.square(v_target)))
     info['v_magnitude_b1'] = jnp.sqrt(jnp.mean(jnp.square(v_b1)))

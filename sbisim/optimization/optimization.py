@@ -40,15 +40,17 @@ class OptState:
 
     params: PyTree
     ema_params: PyTree
+    teacher_weights: PyTree
     state: PyTree
 
-    def __init__(self, params, ema_params, state):
+    def __init__(self, params, ema_params, state, teacher_weights):
         self.params = params
         self.ema_params = ema_params
+        self.teacher_weights = teacher_weights
         self.state = state
 
     def tree_flatten(self):
-        children = (self.params, self.ema_params, self.state)
+        children = (self.params, self.ema_params, self.state, self.teacher_weights)
         aux_data = None
         return (children, aux_data)
 
@@ -117,6 +119,20 @@ class Optimization:
         if hasattr(self.scheduler, "update"):
             self.scheduler.update(logs)
         self.state = self.optimizer.update_learning_rate(self.state, self.scheduler(i))
+
+    def set_teacher_weights(self, opt_state, teacher_weights):
+        """Set teacher weights in the optimizer state."""
+        if isinstance(opt_state, OptState):
+            opt_state.teacher_weights = teacher_weights
+        else:
+            raise ValueError("opt_state must be an instance of OptState")
+
+    def get_teacher_weights(self, opt_state):
+        """Get teacher weights from the optimizer state."""
+        if isinstance(opt_state, OptState):
+            return opt_state.teacher_weights
+        else:
+            raise ValueError("opt_state must be an instance of OptState")
 
     def update(self, i, opt_state, grads):
 

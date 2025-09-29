@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import numpy as np
 
 def get_targets(FLAGS, key, model, params, batch,
-                force_t=-1, force_dt=-1):
+                force_t=-1, force_dt=-1, epoch: int = 0):
 
     time_key, noise_key = jax.random.split(key, 2)
     info = {}
@@ -12,8 +12,8 @@ def get_targets(FLAGS, key, model, params, batch,
     batch_size = x_samples.shape[0]
 
     # 1) =========== Sample dt (based on current train step). ============
-    dt_flow = np.log2(FLAGS.model['denoise_timesteps']).astype(jnp.int32)
-    dt_base = dt_flow - jnp.floor(FLAGS.current_step / (FLAGS.max_steps / dt_flow)) - 1
+    dt_flow = np.log2(FLAGS['model']['denoise_timesteps']).astype(jnp.int32)
+    dt_base = dt_flow - jnp.floor(epoch / (FLAGS['max_epochs'] / dt_flow)) - 1
     dt_base = jnp.ones(batch_size, dtype=jnp.int32) * dt_base
     dt = 1 / (2 ** (dt_base))
     dt_base_bootstrap = dt_base + 1
@@ -24,7 +24,7 @@ def get_targets(FLAGS, key, model, params, batch,
     dt_sections = jnp.power(2, dt_base) # [1, 2, 4, 8, 16, 32]
     t = jax.random.randint(time_key, (batch_size,), minval=0, maxval=dt_sections).astype(jnp.float32)
     t = t / dt_sections # Between 0 and 1.
-    t_full = t[:, None, None, None]
+    t_full = jnp.expand_dims(t, axis=(1,))
 
     # 3) =========== Generate Bootstrap Targets ============
     x_1 = x_samples
@@ -35,14 +35,14 @@ def get_targets(FLAGS, key, model, params, batch,
 
     call_model_fn = lambda *args, **kwargs: model.apply({'params': params}, *args, **kwargs)
 
-    cfg_scale = jnp.where(dt_base == dt_flow-1, FLAGS.model['cfg_scale'], 1)[0]
-    if not FLAGS.model['bootstrap_cfg']:
+    cfg_scale = jnp.where(dt_base == dt_flow-1, FLAGS['model']['cfg_scale'], 1)[0]
+    if not FLAGS['model']['bootstrap_cfg']:
 
         v_b1 = call_model_fn(x_t, y_samples, t, dt_base_bootstrap, train=False)
 
         t2 = t + dt_bootstrap
-        x_t2 = x_t + dt_bootstrap[:, None, None, None] * v_b1
-        x_t2 = jnp.clip(x_t2, -4, 4)
+        x_t2 = x_t + jnp.expand_dims(dt_bootstrap, axis=(1,)) * v_b1
+        x_t2 = jnp.clip(x_t2, -10, 10)
 
         v_b2 = call_model_fn(x_t2, y_samples, t2, dt_base_bootstrap, train=False)
 
@@ -51,14 +51,14 @@ def get_targets(FLAGS, key, model, params, batch,
         x_t_extra = jnp.concatenate([x_t, x_t], axis=0)
         t_extra = jnp.concatenate([t, t], axis=0)
         dt_base_extra = jnp.concatenate([dt_base_bootstrap, dt_base_bootstrap], axis=0)
-        labels_extra = jnp.concatenate([labels, jnp.ones_like(labels, dtype=jnp.int32) * FLAGS.model['num_classes']], axis=0)
+        labels_extra = jnp.concatenate([labels, jnp.ones_like(labels, dtype=jnp.int32) * FLAGS['model']['num_classes']], axis=0)
         v_b1_raw = call_model_fn(x_t_extra, y_samples, t_extra, dt_base_extra, train=False)
         v_b_cond = v_b1_raw[:x_1.shape[0]]
         v_b_uncond = v_b1_raw[x_1.shape[0]:]
         v_b1 = v_b_uncond + cfg_scale * (v_b_cond - v_b_uncond)
 
         t2 = t + dt_bootstrap
-        x_t2 = x_t + dt_bootstrap[:, None, None, None] * v_b1
+        x_t2 = x_t + jnp.expand_dims(dt_bootstrap, axis=(1,)) * v_b1
         x_t2 = jnp.clip(x_t2, -4, 4)
         x_t2_extra = jnp.concatenate([x_t2, x_t2], axis=0)
         t2_extra = jnp.concatenate([t2, t2], axis=0)
@@ -73,4 +73,4 @@ def get_targets(FLAGS, key, model, params, batch,
     info['v_magnitude_b1'] = jnp.sqrt(jnp.mean(jnp.square(v_b1)))
     info['v_magnitude_b2'] = jnp.sqrt(jnp.mean(jnp.square(v_b2)))
 
-    return x_t, v_target, t, dt_base, labels, info
+    return x_t, v_target, t, y_samples, dt_base, labels, info

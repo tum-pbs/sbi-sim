@@ -232,12 +232,13 @@ class SGLDSampler(BaseSampler):
 class FlowMapSampler(BaseSampler):
 
     def __init__(self, num_steps: int = 1, base_steps: int = 128,
-                 t_0: float = 0.0, t_1: float = 1.0, rtol: float = 1e-5, mode: str = 'none',
+                 t_0: float = 0.0, t_1: float = 1.0, rtol: float = 1e-5, mode: str = 'euler',
                  atol: float = 1e-5, sigma_init: float = 1.0, sigma_rescale: float = 0.0, dt_base_steps: Optional[int] = None):
 
         self.base_steps = base_steps
         self.num_steps = num_steps
         self.dt_base_steps = dt_base_steps
+        self.mode = mode
 
         assert base_steps == num_steps or (base_steps // num_steps) % 2 == 0, \
             f"num_steps {num_steps} needs to be a power of two and divide base_steps {base_steps}"
@@ -294,7 +295,20 @@ class FlowMapSampler(BaseSampler):
             v_ = model.apply(params_, x_, conditioning_, t_, dt_base_, rngs=rng_)
             rng_ = jr.split(rng_)[0]
 
-            x_ = x_ + jnp.einsum('ij,i->ij', v_, dt_)
+            if self.mode=='euler':
+
+                x_ = x_ + jnp.einsum('i...,i->i...', v_, dt_)
+
+            elif self.mode=='consistency':
+
+                eps = jr.normal(rng_, x_.shape)
+                rng_ = jr.split(rng_)[0]
+                x1_ = x_ + jnp.einsum('i...,i->i...', v_, (1-t_))
+                x_ = (jnp.einsum('i...,i->i...', x1_, (t_ + dt_))
+                      + jnp.einsum('i...,i->i...', eps, (1 - t_ - dt_)))
+
+            else:
+                raise NotImplementedError
 
             values = (
                 x_, steps_, conditioning_, dt_base_, dt_, params_, rng_

@@ -13,7 +13,8 @@ class OptaxWrapper(OptimizerWrapper):
 
     def init(self, params, **kwargs):
 
-        return OptState(params=params, ema_params=params, state=self.opt.init(params, **kwargs))
+        return OptState(params=params, ema_params=params, state=self.opt.init(params, **kwargs),
+                        teacher_weights=params)
 
     def update(self, i, opt_state, grads):
 

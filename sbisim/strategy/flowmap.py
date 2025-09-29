@@ -4,6 +4,7 @@ from typing import Tuple, Any, Dict, Union
 
 import jax.random as jr
 import jax.numpy as jnp
+import jax.lax
 from jaxtyping import PyTree
 from omegaconf import OmegaConf
 import numpy as np
@@ -22,7 +23,7 @@ from abc import ABC
 
 from flax import linen as nn
 
-model_config = dict({
+model_config = {
     'class_dropout_prob': 0.1,
     'num_classes': 1000,
     'denoise_timesteps': 128,
@@ -30,12 +31,14 @@ model_config = dict({
     'bootstrap_cfg': 0,
     'bootstrap_every': 8,
     'bootstrap_dt_bias': 0,
-})
+}
 
-FLAGS = OmegaConf.create({
+FLAGS = {
     'batch_size': 64,
+    'epoch': -1,
+    'max_epochs': -1,
     'model': model_config,
-})
+}
 
 def get_target_fn(method):
 
@@ -76,6 +79,7 @@ class FlowMap(Strategy, ABC):
                  sampler: Dict,
                  method: str = 'flow_matching',
                  teacher_params_weight_file: str = None,
+                 max_epochs: int = -1,
                  ):
         super().__init__()
 
@@ -94,30 +98,47 @@ class FlowMap(Strategy, ABC):
 
         self.opt = None
         self.initialized = False
+        self.FLAGS = FLAGS
+        self.FLAGS['max_epochs'] = max_epochs
 
     def get_flow_dimension(self) -> int:
         return self.dim_flow
 
-    def get_teacher_weights(self, opt_state):
+
+
+    def get_teacher_weights(self, opt_state, epoch: int, max_epochs: int) -> PyTree:
 
         if self.method == 'flow_matching':
             return None
         elif self.method in ['consistency_training', 'shortcut', 'livereflow']:
             return self.opt.get_ema_params_from_state(opt_state)
-        elif self.method in ['consistency_distillation', 'progressive']:
-            return self.teacher_weights
+        elif self.method in ['consistency_distillation']:
+            return self.teacher_params
+        elif self.method in ['progressive']:
+            num_sections = jnp.log2(self.FLAGS['model']['denoise_timesteps']).astype(jnp.int32)
+
+            teacher_params = jax.lax.cond(
+                epoch % (max_epochs // num_sections) == 0,
+                # lambda _: self.opt.get_ema_params_from_state(opt_state),
+                lambda _: self.opt.get_params_from_state(opt_state),
+                lambda _: self.opt.get_teacher_weights(opt_state),
+                operand=None
+            )
+
+            return teacher_params
+
         else:
             raise ValueError('Unknown method: {}'.format(self.method))
 
     def loss_fn(self, model_params: PyTree, ema_params: PyTree,
-                      rng: jr.PRNGKey, batch: PyTree) \
+                      rng: jr.PRNGKey, batch: PyTree, logs: PyTree) \
             -> Tuple[jnp.ndarray, jr.PRNGKey]:
 
         force_t = -1
         force_dt = -1
 
-        x_t, v_t, t, y, dt_base, labels, info = self.get_targets(FLAGS, rng, self.model, ema_params,
-                                                            batch, force_t, force_dt)
+        x_t, v_t, t, y, dt_base, labels, info = self.get_targets(self.FLAGS, rng, self.model, ema_params,
+                                                            batch, force_t, force_dt, epoch=logs['epoch'])
         rng, _ = jr.split(rng, 2)
 
         regressed_field = self.model.apply({'params': model_params},
@@ -125,7 +146,7 @@ class FlowMap(Strategy, ABC):
 
         loss = jnp.mean(jnp.mean((v_t - regressed_field) ** 2, axis=1))
 
-        return loss, rng
+        return loss, (rng, logs)
 
     def setup(self, opt, example_data: PyTree, key: jr.PRNGKey, batch_size: int) -> Tuple[PyTree, jr.PRNGKey]:
         self.opt = opt
@@ -151,10 +172,12 @@ class FlowMap(Strategy, ABC):
                    batch: PyTree) -> Tuple[PyTree, jr.PRNGKey, Dict[str, Any]]:
 
         model_params = self.opt.get_params_from_state(opt_state)
-        teacher_params = self.get_teacher_weights(opt_state)
 
-        (loss, rng), grads = value_and_grad(self.loss_fn, has_aux=True)(
-            model_params, teacher_params, rng, batch)
+        teacher_params = self.get_teacher_weights(opt_state, logs['epoch'], logs['max_epochs'])
+        self.opt.set_teacher_weights(opt_state, teacher_params)
+
+        (loss, (rng, logs)), grads = value_and_grad(self.loss_fn, has_aux=True)(
+            model_params, teacher_params, rng, batch, logs)
 
         opt_state = self.opt.update(i, opt_state, grads)
 
@@ -167,9 +190,9 @@ class FlowMap(Strategy, ABC):
                   batch: PyTree, testing: bool) -> Tuple[jr.PRNGKey, Dict[str, Any]]:
 
         model_params = self.opt.get_params_from_state(opt_state)
-        ema_params = self.opt.get_ema_params_from_state(opt_state)
+        teacher_params = self.get_teacher_weights(opt_state, logs['epoch'], logs['max_epochs'])
 
-        loss, rng = self.loss_fn(model_params, ema_params, rng, batch)
+        loss, (rng, logs) = self.loss_fn(model_params, teacher_params, rng, batch, logs)
 
         logs["val/loss"] = jnp.mean(loss)
 

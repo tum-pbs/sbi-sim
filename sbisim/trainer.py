@@ -138,7 +138,7 @@ class TrainerModule:
             return {}, self.rng
 
         rng = self.rng
-        logs = {'epoch': self.epoch, 'global_step': self.global_step}
+        logs = {'epoch': self.epoch, 'global_step': self.global_step, 'max_epochs': self.num_epochs}
 
         if self.epoch == 0:
             logs = self.on_train_begin(logs, **self.pack_())
@@ -161,7 +161,7 @@ class TrainerModule:
                 print(f'Met early stopping criteria, breaking after epoch {self.epoch}')
                 break
 
-            logs = {'epoch': self.epoch, 'global_step': self.global_step}
+            logs = {'epoch': self.epoch, 'global_step': self.global_step, 'max_epochs': self.num_epochs}
 
         logs = self.on_train_end(logs, **self.pack_())
 
@@ -256,7 +256,7 @@ class TrainerModule:
 
         wandb.log(logs)
 
-        logs = {'epoch': self.epoch, 'global_step': self.global_step}
+        logs = {'epoch': self.epoch, 'global_step': self.global_step, 'max_epochs': self.num_epochs}
 
         return logs
 

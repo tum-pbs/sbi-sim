@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import numpy as np
 
 def get_targets(FLAGS, key, model, params, batch,
-                force_t=-1, force_dt=-1):
+                force_t=-1, force_dt=-1, epoch:int=0):
     time_key, noise_key = jax.random.split(key, 2)
     info = {}
 
@@ -13,8 +13,9 @@ def get_targets(FLAGS, key, model, params, batch,
     labels = jnp.zeros((batch_size, ), dtype=jnp.int32)
 
     # 1) =========== Sample dt (based on current train step). ============
-    dt_flow = np.log2(FLAGS.model['denoise_timesteps']).astype(jnp.int32)
-    dt_base = jnp.floor(FLAGS.current_step / (FLAGS.max_steps / dt_flow))
+    dt_flow = np.log2(FLAGS['model']['denoise_timesteps']).astype(jnp.int32)
+    dt_base = jnp.floor(epoch / (FLAGS['max_epochs'] / dt_flow))
+    dt_base = jnp.ones((batch_size,),  dtype=jnp.int32) * dt_base
     dt = 1 / (2 ** (dt_base))
     info['dt_base'] = jnp.mean(dt_base)
 
@@ -22,9 +23,9 @@ def get_targets(FLAGS, key, model, params, batch,
     dt_sections = jnp.power(2, dt_base) # [1, 2, 4, 8, 16, 32]
     t = jax.random.randint(time_key, (batch_size,), minval=0, maxval=dt_sections).astype(jnp.float32)
     t = t / dt_sections # Between 0 and 1.
-    t_full = t[:, None, None, None]
+    t_full = jnp.expand_dims(t, axis=(1,))
     t2 = t + dt
-    t2_full = t2[:, None, None, None]
+    t2_full = jnp.expand_dims(t2, axis=(1,))
 
     # 2) =========== Generate Bootstrap Targets ============
     x_1 = x_samples
@@ -36,10 +37,10 @@ def get_targets(FLAGS, key, model, params, batch,
 
     v_b2 = call_model_fn(x_t2, y_samples, t2, dt_base, train=False)
     pred_x1 = x_t2 + (1 - t2_full) * v_b2
-    v_target = (pred_x1 - x_t) / (1 - t[:, None, None, None])
+    v_target = (pred_x1 - x_t) / (1 - jnp.expand_dims(t, axis=(1,)))
 
     info['v_magnitude_bootstrap'] = jnp.sqrt(jnp.mean(jnp.square(v_target)))
     info['v_magnitude_b1'] = jnp.sqrt(jnp.mean(jnp.square(x_t2 - x_t)))
     info['v_magnitude_b2'] = jnp.sqrt(jnp.mean(jnp.square(v_b2)))
 
-    return x_t, v_target, t, dt_base, labels, info
+    return x_t, v_target, t, y_samples, dt_base, labels, info

@@ -20,7 +20,9 @@ def get_targets(FLAGS, key, model, params, batch,
     t /= FLAGS.model['denoise_timesteps']
     force_t_vec = jnp.ones(batch_size, dtype=jnp.float32) * force_t
     t = jnp.where(force_t_vec != -1, force_t_vec, t)         # If force_t is not -1, then use force_t.
-    t_full = t[:, None, None, None] # [batch, 1, 1, 1]
+
+    t_full = jnp.expand_dims(t, axis=(1,))
+    # t_full = t[:, None, None, None] # [batch, 1, 1, 1]
     x_0 = jax.random.normal(noise_key, x_samples.shape)
     x_1 = x_samples
     x_t = (1 - (1 - 1e-5) * t_full) * x_0 + t_full * x_1
@@ -67,7 +69,8 @@ def get_targets(FLAGS, key, model, params, batch,
 
     t_reflow = jax.random.randint(time_key, (bootstrap_size,), minval=0, maxval=FLAGS.model['denoise_timesteps']).astype(jnp.float32)
     t_reflow /= FLAGS.model['denoise_timesteps']
-    t_reflow_full = t_reflow[:, None, None, None] # [batch, 1, 1, 1]
+    # t_reflow_full = t_reflow[:, None, None, None] # [batch, 1, 1, 1]
+    t_reflow_full = jnp.expand_dims(t_reflow, axis=(1,))
     x_t_reflow = (1 - (1 - 1e-5) * t_reflow_full) * x_0_reflow + t_reflow_full * x
 
     x_t = jnp.concatenate([x_t_reflow, x_t[:-bootstrap_size]], axis=0)
