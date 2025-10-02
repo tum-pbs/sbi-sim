@@ -1,4 +1,4 @@
-name: checkerboard-flowmap-consistency-distillation
+name: checkerboard-flowmap-consistency-distillation-4
 project: flowmaps
 
 dim_flow: 2
@@ -39,7 +39,7 @@ strategy:
         in_dim: ${dim_network}
         activation_fn: gelu
     method: 'consistency_distillation'
-    teacher_params_weight_file: '/home/holzschuh/projects/remote/sbi-sim/logs/checkerboard-flowmap-fm/'
+    teacher_params_weight_file: '/home/holzschuh/projects/remote/sbi-sim/logs/checkerboard-flowmap-fm-2/'
 
 num_steps: 10000
 training:

@@ -106,14 +106,18 @@ class FlowMap(Strategy, ABC):
 
 
 
-    def get_teacher_weights(self, opt_state, epoch: int, max_epochs: int) -> PyTree:
+    def get_param_dict(self, opt_state, epoch: int, max_epochs: int) -> PyTree:
 
-        if self.method == 'flow_matching':
-            return None
-        elif self.method in ['consistency_training', 'shortcut', 'livereflow']:
-            return self.opt.get_ema_params_from_state(opt_state)
+        param_dict = {}
+
+        model_ema_params = self.opt.get_ema_params_from_state(opt_state)
+        model_params = self.opt.get_params_from_state(opt_state)
+        teacher_params = None
+
+        if self.method in ['consistency_training', 'shortcut', 'livereflow']:
+            teacher_params = self.opt.get_ema_params_from_state(opt_state)
         elif self.method in ['consistency_distillation']:
-            return self.teacher_params
+            teacher_params = self.teacher_params
         elif self.method in ['progressive']:
             num_sections = jnp.log2(self.FLAGS['model']['denoise_timesteps']).astype(jnp.int32)
 
@@ -124,20 +128,25 @@ class FlowMap(Strategy, ABC):
                 lambda _: self.opt.get_teacher_weights(opt_state),
                 operand=None
             )
-
-            return teacher_params
-
+        elif self.method in ['flow_matching']:
+            pass
         else:
             raise ValueError('Unknown method: {}'.format(self.method))
 
-    def loss_fn(self, model_params: PyTree, ema_params: PyTree,
+        param_dict['teacher_params'] = teacher_params
+        param_dict['model_params'] = model_params
+        param_dict['model_ema_params'] = model_ema_params
+
+        return param_dict
+
+    def loss_fn(self, model_params: PyTree, params_dict: PyTree,
                       rng: jr.PRNGKey, batch: PyTree, logs: PyTree) \
             -> Tuple[jnp.ndarray, jr.PRNGKey]:
 
         force_t = -1
         force_dt = -1
 
-        x_t, v_t, t, y, dt_base, labels, info = self.get_targets(self.FLAGS, rng, self.model, ema_params,
+        x_t, v_t, t, y, dt_base, labels, info = self.get_targets(self.FLAGS, rng, self.model, params_dict,
                                                             batch, force_t, force_dt, epoch=logs['epoch'])
         rng, _ = jr.split(rng, 2)
 
@@ -171,13 +180,11 @@ class FlowMap(Strategy, ABC):
     def train_step(self, i: int, opt_state: PyTree, rng: jr.PRNGKey, logs: Dict[str, Any],
                    batch: PyTree) -> Tuple[PyTree, jr.PRNGKey, Dict[str, Any]]:
 
-        model_params = self.opt.get_params_from_state(opt_state)
-
-        teacher_params = self.get_teacher_weights(opt_state, logs['epoch'], logs['max_epochs'])
-        self.opt.set_teacher_weights(opt_state, teacher_params)
+        param_dict = self.get_param_dict(opt_state, logs['epoch'], logs['max_epochs'])
+        self.opt.set_teacher_weights(opt_state, param_dict['teacher_params'])
 
         (loss, (rng, logs)), grads = value_and_grad(self.loss_fn, has_aux=True)(
-            model_params, teacher_params, rng, batch, logs)
+            param_dict['model_params'], param_dict, rng, batch, logs)
 
         opt_state = self.opt.update(i, opt_state, grads)
 
@@ -189,10 +196,9 @@ class FlowMap(Strategy, ABC):
     def eval_step(self, opt_state: PyTree, rng: jr.PRNGKey, logs: Dict[str, Any],
                   batch: PyTree, testing: bool) -> Tuple[jr.PRNGKey, Dict[str, Any]]:
 
-        model_params = self.opt.get_params_from_state(opt_state)
-        teacher_params = self.get_teacher_weights(opt_state, logs['epoch'], logs['max_epochs'])
+        param_dict = self.get_param_dict(opt_state, logs['epoch'], logs['max_epochs'])
 
-        loss, (rng, logs) = self.loss_fn(model_params, teacher_params, rng, batch, logs)
+        loss, (rng, logs) = self.loss_fn(param_dict['model_params'], param_dict, rng, batch, logs)
 
         logs["val/loss"] = jnp.mean(loss)
 

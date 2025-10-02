@@ -192,7 +192,7 @@ class TrainerModule:
                                                    rng, logs, batch)
             avg_loss += logs['train/loss']
             global_step += 1
-            p.set_description(f'{self.epoch}/{self.num_epochs} loss: {avg_loss/(step_+1):.3f}')
+            p.set_description(f'{self.epoch}/{self.num_epochs} loss: {avg_loss/(step_+1):.6f}')
 
             step_ += 1
             if step_ >= num_batches:
@@ -215,7 +215,7 @@ class TrainerModule:
                 rng, logs = self.strategy.eval_step(opt_state,
                                                     rng, logs, batch, testing=False)
                 avg_loss += logs['val/loss']
-                p.set_description(f'{self.epoch}/{self.num_epochs} val loss: {avg_loss/(step_+1):.3f}')
+                p.set_description(f'{self.epoch}/{self.num_epochs} val loss: {avg_loss/(step_+1):.6f}')
 
                 step_ += 1
                 if step_ >= num_val_batches:

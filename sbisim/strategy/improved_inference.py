@@ -284,7 +284,7 @@ class FlowMapSampler(BaseSampler):
 
 
         rng_apply, rng = generate_apply_rngs(rng)
-        steps = jnp.linspace(self.t_0, self.t_1, num_steps)
+        steps = jnp.linspace(self.t_0, self.t_1, num_steps+1)[:-1]
 
         def loop_body(iteration, values):
 

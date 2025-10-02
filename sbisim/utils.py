@@ -58,6 +58,10 @@ def parse_config(config):
 def restore_checkpoint(dir: Path, target=None, type: str="latest"):
 
     dir = dir.joinpath(type)
+
+    # get absolute path
+    dir = dir.resolve()
+
     orbax_checkpointer_latest = orbax.checkpoint.Checkpointer(
         orbax.checkpoint.PyTreeCheckpointHandler())
     options_latest = orbax.checkpoint.CheckpointManagerOptions(
