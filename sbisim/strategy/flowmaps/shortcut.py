@@ -4,8 +4,8 @@ import jax.numpy as jnp
 
 import numpy as np
 
-def get_targets(FLAGS, key, model, params, batch,
-                force_t=-1, force_dt=-1):
+def get_targets(FLAGS, key, model, params_dict, batch,
+                force_t=-1, force_dt=-1, epoch: int=0):
 
     label_key, time_key, noise_key = jr.split(key, 3)
     info = {}
@@ -14,9 +14,9 @@ def get_targets(FLAGS, key, model, params, batch,
     batch_size = x_samples.shape[0]
 
     # 1) =========== Sample dt. ============
-    bootstrap_batchsize = batch_size // FLAGS.model['bootstrap_every']
-    log2_sections = np.log2(FLAGS.model['denoise_timesteps']).astype(np.int32)
-    if FLAGS.model['bootstrap_dt_bias'] == 0:
+    bootstrap_batchsize = batch_size // FLAGS['model']['bootstrap_every']
+    log2_sections = np.log2(FLAGS['model']['denoise_timesteps']).astype(np.int32)
+    if FLAGS['model']['bootstrap_dt_bias'] == 0:
         dt_base = jnp.repeat(log2_sections - 1 - jnp.arange(log2_sections), bootstrap_batchsize // log2_sections)
         dt_base = jnp.concatenate([dt_base, jnp.zeros(bootstrap_batchsize - dt_base.shape[0], )])
         num_dt_cfg = bootstrap_batchsize // log2_sections
@@ -49,34 +49,34 @@ def get_targets(FLAGS, key, model, params, batch,
     x_t = (1 - (1 - 1e-5) * t_full) * x_0 + t_full * x_1
     bst_labels = labels[:bootstrap_batchsize]
 
-    # call_model_fn = train_state.call_model if FLAGS.model['bootstrap_ema'] == 0 else train_state.call_model_ema
+    # call_model_fn = train_state.call_model if FLAGS['model']['bootstrap_ema'] == 0 else train_state.call_model_ema
 
-    if not FLAGS.model['bootstrap_cfg']:
+    if not FLAGS['model']['bootstrap_cfg']:
 
         # v_b1 = call_model_fn(x_t, t, dt_base_bootstrap, bst_labels, train=False)
-        v_b1 = model.apply({'params': params}, x_t, y_samples[:bootstrap_batchsize], t, dt_base_bootstrap,
+        v_b1 = model.apply({'params': params_dict['model_ema_params']}, x_t, y_samples[:bootstrap_batchsize], t, dt_base_bootstrap,
                             train=False)
         t2 = t + dt_bootstrap
         x_t2 = x_t + jnp.expand_dims(dt_bootstrap, axis=(1,)) * v_b1
         x_t2 = jnp.clip(x_t2, -4, 4)
 
         # v_b2 = call_model_fn(x_t2, t2, dt_base_bootstrap, bst_labels, train=False)
-        v_b2 = model.apply({'params': params}, x_t2, y_samples[:bootstrap_batchsize], t2, dt_base_bootstrap,
+        v_b2 = model.apply({'params': params_dict['model_ema_params']}, x_t2, y_samples[:bootstrap_batchsize], t2, dt_base_bootstrap,
                             train=False)
         v_target = (v_b1 + v_b2) / 2
     else:
         x_t_extra = jnp.concatenate([x_t, x_t[:num_dt_cfg]], axis=0)
         t_extra = jnp.concatenate([t, t[:num_dt_cfg]], axis=0)
         dt_base_extra = jnp.concatenate([dt_base_bootstrap, dt_base_bootstrap[:num_dt_cfg]], axis=0)
-        labels_extra = jnp.concatenate([bst_labels, jnp.ones(num_dt_cfg, dtype=jnp.int32) * FLAGS.model['num_classes']],
+        labels_extra = jnp.concatenate([bst_labels, jnp.ones(num_dt_cfg, dtype=jnp.int32) * FLAGS['model']['num_classes']],
                                        axis=0)
 
         # v_b1_raw = call_model_fn(x_t_extra, t_extra, dt_base_extra, labels_extra, train=False)
-        v_b1_raw = model.apply({'params': params}, x_t_extra, y_samples, t_extra, dt_base_extra,
+        v_b1_raw = model.apply({'params': params_dict['model_ema_params']}, x_t_extra, y_samples, t_extra, dt_base_extra,
                                  train=False)
         v_b_cond = v_b1_raw[:x_1.shape[0]]
         v_b_uncond = v_b1_raw[x_1.shape[0]:]
-        v_cfg = v_b_uncond + FLAGS.model['cfg_scale'] * (v_b_cond[:num_dt_cfg] - v_b_uncond)
+        v_cfg = v_b_uncond + FLAGS['model']['cfg_scale'] * (v_b_cond[:num_dt_cfg] - v_b_uncond)
         v_b1 = jnp.concatenate([v_cfg, v_b_cond[num_dt_cfg:]], axis=0)
 
         t2 = t + dt_bootstrap
@@ -85,12 +85,12 @@ def get_targets(FLAGS, key, model, params, batch,
         x_t2_extra = jnp.concatenate([x_t2, x_t2[:num_dt_cfg]], axis=0)
         t2_extra = jnp.concatenate([t2, t2[:num_dt_cfg]], axis=0)
         # v_b2_raw = call_model_fn(x_t2_extra, t2_extra, dt_base_extra, labels_extra, train=False)
-        v_b2_raw = model.apply({'params': params}, x_t2_extra, y_samples, t2_extra, dt_base_extra,
+        v_b2_raw = model.apply({'params': params_dict['model_ema_params']}, x_t2_extra, y_samples, t2_extra, dt_base_extra,
                                     train=False)
 
         v_b2_cond = v_b2_raw[:x_1.shape[0]]
         v_b2_uncond = v_b2_raw[x_1.shape[0]:]
-        v_b2_cfg = v_b2_uncond + FLAGS.model['cfg_scale'] * (v_b2_cond[:num_dt_cfg] - v_b2_uncond)
+        v_b2_cfg = v_b2_uncond + FLAGS['model']['cfg_scale'] * (v_b2_cond[:num_dt_cfg] - v_b2_uncond)
         v_b2 = jnp.concatenate([v_b2_cfg, v_b2_cond[num_dt_cfg:]], axis=0)
         v_target = (v_b1 + v_b2) / 2
 
@@ -103,14 +103,14 @@ def get_targets(FLAGS, key, model, params, batch,
 
     # 4) =========== Generate Flow-Matching Targets ============
 
-    labels_dropout = jr.bernoulli(label_key, FLAGS.model['class_dropout_prob'], (labels.shape[0],))
-    labels_dropped = jnp.where(labels_dropout, FLAGS.model['num_classes'], labels)
-    info['dropped_ratio'] = jnp.mean(labels_dropped == FLAGS.model['num_classes'])
+    labels_dropout = jr.bernoulli(label_key, FLAGS['model']['class_dropout_prob'], (labels.shape[0],))
+    labels_dropped = jnp.where(labels_dropout, FLAGS['model']['num_classes'], labels)
+    info['dropped_ratio'] = jnp.mean(labels_dropped == FLAGS['model']['num_classes'])
 
     # Sample t.
-    t = jr.randint(time_key, (x_samples.shape[0],), minval=0, maxval=FLAGS.model['denoise_timesteps']).astype(
+    t = jr.randint(time_key, (x_samples.shape[0],), minval=0, maxval=FLAGS['model']['denoise_timesteps']).astype(
         jnp.float32)
-    t /= FLAGS.model['denoise_timesteps']
+    t /= FLAGS['model']['denoise_timesteps']
     force_t_vec = jnp.ones(x_samples.shape[0], dtype=jnp.float32) * force_t
     t = jnp.where(force_t_vec != -1, force_t_vec, t)  # If force_t is not -1, then use force_t.
     t_full = jnp.expand_dims(t, axis=(1,))  # [batch, 1, 1, 1]
@@ -121,11 +121,11 @@ def get_targets(FLAGS, key, model, params, batch,
     x_t = (1 - (1 - 1e-5) * t_full) * x_0 + t_full * x_1
     v_t = x_1 - (1 - 1e-5) * x_0
 
-    dt_flow = np.log2(FLAGS.model['denoise_timesteps']).astype(jnp.int32)
+    dt_flow = np.log2(FLAGS['model']['denoise_timesteps']).astype(jnp.int32)
     dt_base = jnp.ones(x_samples.shape[0], dtype=jnp.int32) * dt_flow
 
     # ==== 5) Merge Flow+Bootstrap ====
-    bst_size = batch_size // FLAGS.model['bootstrap_every']
+    bst_size = batch_size // FLAGS['model']['bootstrap_every']
     bst_size_data = batch_size - bst_size
 
     x_t = jnp.concatenate([bst_xt, x_t[:bst_size_data]], axis=0)
